@@ -425,7 +425,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.1</h2>
+          <h2>BiMo Contact Patch v0.2</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -495,6 +495,13 @@
 
           <section class="section">
             <div class="section-title">输入</div>
+            <label class="toggle-row">
+              <span>反转倾斜</span>
+              <span class="switch">
+                <input id="invertTilt" type="checkbox" checked />
+                <span class="slider"></span>
+              </span>
+            </label>
             <label class="control">
               <span>鼠标压力</span>
               <input id="mousePressure" type="range" min="0.04" max="1" step="0.01" value="0.48" />
@@ -521,6 +528,7 @@
       const controls = {
         showPatch: document.getElementById("showPatch"),
         dryCut: document.getElementById("dryCut"),
+        invertTilt: document.getElementById("invertTilt"),
         size: document.getElementById("size"),
         deform: document.getElementById("deform"),
         lag: document.getElementById("lag"),
@@ -551,6 +559,7 @@
       const settings = {
         showPatch: true,
         dryCut: true,
+        invertTilt: true,
         size: 42,
         deform: 1,
         lag: 0.42,
@@ -591,6 +600,7 @@
       function syncSettings() {
         settings.showPatch = controls.showPatch.checked;
         settings.dryCut = controls.dryCut.checked;
+        settings.invertTilt = controls.invertTilt.checked;
         for (const key of ["size", "deform", "lag", "density", "roughness", "dryness", "mousePressure"]) {
           settings[key] = Number(controls[key].value);
           outputs[key].textContent = settings[key].toFixed(key === "size" ? 0 : 2);
@@ -704,7 +714,8 @@
         const speed = clamp(distance / dt, 0, 4);
         const motion = distance > 0.24 ? normalize(dx, dy, brush.dirX, brush.dirY) : { x: brush.dirX, y: brush.dirY };
         const tiltMag = clamp(hypot(sample.tiltX, sample.tiltY) / 90, 0, 1);
-        const tilt = normalize(sample.tiltX, sample.tiltY, motion.x, motion.y);
+        const tiltSign = settings.invertTilt ? -1 : 1;
+        const tilt = normalize(sample.tiltX * tiltSign, sample.tiltY * tiltSign, motion.x, motion.y);
         const motionWeight = clamp(speed / 0.7, 0, 1);
         const tiltWeight = clamp(tiltMag * 1.15, 0, 1);
         const direction = normalize(
