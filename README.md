@@ -19,6 +19,7 @@ Then open the local URL from iPad Safari on the same network.
 - Pressure-driven contact area expansion
 - Movement and tilt-driven wedge/contact patch direction
 - Tilt inversion and 90-degree rotation controls for calibrating Apple Pencil/Safari tilt axes
+- Tilt dead-zone, smoothing, and influence controls to reduce contact patch jitter
 - Brush deformation lag
 - Live contact patch overlay
 - Basic ink deposition, dry cuts, rough edges, and soft/firm brush presets
