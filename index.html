@@ -1,0 +1,1040 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BiMo" />
+    <title>BiMo - 毛笔接触面测试台</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #151715;
+        --paper: #f4efe3;
+        --paper-deep: #e6dcc8;
+        --panel: #27231d;
+        --panel-2: #343027;
+        --line: rgba(255, 255, 255, 0.16);
+        --text: #f7f2e8;
+        --muted: #c9bfab;
+        --accent: #d7963c;
+        --accent-2: #f1bf62;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: none;
+        background: #171511;
+        font-family:
+          ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .app {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        height: 100dvh;
+        min-height: 100vh;
+        background: #171511;
+      }
+
+      .stage {
+        position: relative;
+        min-width: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 16% 12%, rgba(255, 255, 255, 0.34), transparent 23%),
+          linear-gradient(135deg, rgba(79, 57, 31, 0.08), rgba(255, 255, 255, 0.16)),
+          repeating-linear-gradient(0deg, rgba(73, 57, 31, 0.04) 0 1px, transparent 1px 9px),
+          repeating-linear-gradient(90deg, rgba(73, 57, 31, 0.03) 0 1px, transparent 1px 11px),
+          var(--paper);
+      }
+
+      canvas {
+        position: absolute;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+
+      #overlay {
+        cursor: crosshair;
+      }
+
+      .topbar {
+        position: absolute;
+        top: max(14px, env(safe-area-inset-top));
+        left: max(14px, env(safe-area-inset-left));
+        right: 14px;
+        z-index: 4;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        pointer-events: none;
+      }
+
+      .brand,
+      .readout {
+        border: 1px solid rgba(60, 47, 28, 0.16);
+        background: rgba(246, 239, 223, 0.78);
+        box-shadow: 0 12px 36px rgba(37, 28, 15, 0.12);
+        -webkit-backdrop-filter: blur(18px);
+        backdrop-filter: blur(18px);
+        color: #211b14;
+      }
+
+      .brand {
+        padding: 10px 12px;
+        max-width: 380px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.25;
+        font-weight: 720;
+        letter-spacing: 0;
+      }
+
+      .brand p {
+        margin: 4px 0 0;
+        color: #5f5140;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .readout {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(78px, 1fr));
+        gap: 1px;
+        overflow: hidden;
+        min-width: 236px;
+        padding: 1px;
+      }
+
+      .metric {
+        padding: 8px 9px;
+        background: rgba(255, 252, 244, 0.58);
+      }
+
+      .metric span {
+        display: block;
+        color: #7c6d59;
+        font-size: 10px;
+        line-height: 1;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 4px;
+        font-variant-numeric: tabular-nums;
+        font-size: 13px;
+        line-height: 1;
+      }
+
+      .panel {
+        position: relative;
+        z-index: 5;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        height: 100%;
+        padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 32%),
+          var(--panel);
+        color: var(--text);
+      }
+
+      .panel header {
+        padding-bottom: 14px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .panel h2 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.2;
+        font-weight: 740;
+        letter-spacing: 0;
+      }
+
+      .panel .sub {
+        margin: 6px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 14px 0;
+      }
+
+      .button {
+        min-height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: var(--panel-2);
+        color: var(--text);
+        font-weight: 680;
+        letter-spacing: 0;
+      }
+
+      .button.primary {
+        border-color: rgba(241, 191, 98, 0.42);
+        background: #7f5420;
+        color: #fff8eb;
+      }
+
+      .button:active {
+        transform: translateY(1px);
+        filter: brightness(1.08);
+      }
+
+      .sections {
+        overflow: auto;
+        min-height: 0;
+        padding-right: 2px;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      .section {
+        padding: 14px 0;
+        border-top: 1px solid var(--line);
+      }
+
+      .section:first-child {
+        border-top: 0;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        color: #fff9ed;
+        font-size: 12px;
+        font-weight: 760;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .control {
+        display: grid;
+        grid-template-columns: 94px minmax(0, 1fr) 40px;
+        align-items: center;
+        gap: 10px;
+        min-height: 34px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .control + .control {
+        margin-top: 10px;
+      }
+
+      .control output {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      input[type="range"] {
+        width: 100%;
+        accent-color: var(--accent-2);
+      }
+
+      .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-height: 36px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 48px;
+        height: 28px;
+      }
+
+      .switch input {
+        position: absolute;
+        opacity: 0;
+        inset: 0;
+      }
+
+      .slider {
+        position: absolute;
+        inset: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 999px;
+        background: #1c1a16;
+      }
+
+      .slider::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: #ddd2be;
+        transition: transform 140ms ease;
+      }
+
+      .switch input:checked + .slider {
+        background: #8e5f22;
+      }
+
+      .switch input:checked + .slider::after {
+        transform: translateX(20px);
+        background: #fff5df;
+      }
+
+      .mini-log {
+        display: grid;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .log-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        min-width: 0;
+      }
+
+      .log-row strong {
+        color: var(--text);
+        font-variant-numeric: tabular-nums;
+        font-weight: 650;
+      }
+
+      @media (max-width: 980px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(0, 1fr) 248px;
+        }
+
+        .panel {
+          border-left: 0;
+          border-top: 1px solid rgba(255, 255, 255, 0.12);
+          padding: 12px max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom))
+            max(14px, env(safe-area-inset-left));
+        }
+
+        .panel header,
+        .panel .sub,
+        .readout {
+          display: none;
+        }
+
+        .actions {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          padding: 0 0 10px;
+        }
+
+        .sections {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0 16px;
+        }
+
+        .section {
+          padding: 8px 0;
+        }
+
+        .brand {
+          max-width: 320px;
+        }
+      }
+
+      @media (max-width: 560px) {
+        .app {
+          grid-template-rows: minmax(0, 1fr) 310px;
+        }
+
+        .sections {
+          grid-template-columns: 1fr;
+        }
+
+        .actions {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .brand p {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <main class="stage" id="stage">
+        <canvas id="inkCanvas" aria-label="ink canvas"></canvas>
+        <canvas id="overlayCanvas" aria-label="brush contact overlay"></canvas>
+        <div class="topbar">
+          <section class="brand">
+            <h1>BiMo 毛笔接触面测试台</h1>
+            <p>压力生成铺开面积，拖动和倾斜生成楔形接触面。</p>
+          </section>
+          <section class="readout" aria-live="polite">
+            <div class="metric"><span>压力</span><strong id="hudPressure">0.00</strong></div>
+            <div class="metric"><span>速度</span><strong id="hudSpeed">0</strong></div>
+            <div class="metric"><span>宽度</span><strong id="hudWidth">0</strong></div>
+            <div class="metric"><span>长度</span><strong id="hudLength">0</strong></div>
+          </section>
+        </div>
+      </main>
+
+      <aside class="panel">
+        <header>
+          <h2>BiMo Contact Patch v0.1</h2>
+          <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
+        </header>
+
+        <div class="actions">
+          <button class="button primary" id="clearButton" type="button">清空</button>
+          <button class="button" id="saveButton" type="button">导出</button>
+          <button class="button" id="softPreset" type="button">软毫</button>
+          <button class="button" id="firmPreset" type="button">硬毫</button>
+        </div>
+
+        <div class="sections">
+          <section class="section">
+            <div class="section-title">显示</div>
+            <label class="toggle-row">
+              <span>实时接触面</span>
+              <span class="switch">
+                <input id="showPatch" type="checkbox" checked />
+                <span class="slider"></span>
+              </span>
+            </label>
+            <label class="toggle-row">
+              <span>飞白切割</span>
+              <span class="switch">
+                <input id="dryCut" type="checkbox" checked />
+                <span class="slider"></span>
+              </span>
+            </label>
+          </section>
+
+          <section class="section">
+            <div class="section-title">笔头</div>
+            <label class="control">
+              <span>尺寸</span>
+              <input id="size" type="range" min="18" max="82" step="1" value="42" />
+              <output id="sizeOut">42</output>
+            </label>
+            <label class="control">
+              <span>形变</span>
+              <input id="deform" type="range" min="0" max="1.8" step="0.01" value="1.00" />
+              <output id="deformOut">1.00</output>
+            </label>
+            <label class="control">
+              <span>滞后</span>
+              <input id="lag" type="range" min="0" max="0.92" step="0.01" value="0.42" />
+              <output id="lagOut">0.42</output>
+            </label>
+          </section>
+
+          <section class="section">
+            <div class="section-title">墨迹</div>
+            <label class="control">
+              <span>浓度</span>
+              <input id="density" type="range" min="0.06" max="0.5" step="0.01" value="0.20" />
+              <output id="densityOut">0.20</output>
+            </label>
+            <label class="control">
+              <span>边缘</span>
+              <input id="roughness" type="range" min="0" max="0.9" step="0.01" value="0.24" />
+              <output id="roughnessOut">0.24</output>
+            </label>
+            <label class="control">
+              <span>飞白</span>
+              <input id="dryness" type="range" min="0" max="0.85" step="0.01" value="0.28" />
+              <output id="drynessOut">0.28</output>
+            </label>
+          </section>
+
+          <section class="section">
+            <div class="section-title">输入</div>
+            <label class="control">
+              <span>鼠标压力</span>
+              <input id="mousePressure" type="range" min="0.04" max="1" step="0.01" value="0.48" />
+              <output id="mousePressureOut">0.48</output>
+            </label>
+            <div class="mini-log">
+              <div class="log-row"><span>Pointer</span><strong id="logPointer">-</strong></div>
+              <div class="log-row"><span>Tilt</span><strong id="logTilt">0 / 0</strong></div>
+              <div class="log-row"><span>Twist</span><strong id="logTwist">0</strong></div>
+              <div class="log-row"><span>Samples</span><strong id="logSamples">0</strong></div>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </div>
+
+    <script>
+      const stage = document.getElementById("stage");
+      const inkCanvas = document.getElementById("inkCanvas");
+      const overlayCanvas = document.getElementById("overlayCanvas");
+      const ink = inkCanvas.getContext("2d", { alpha: true });
+      const overlay = overlayCanvas.getContext("2d", { alpha: true });
+
+      const controls = {
+        showPatch: document.getElementById("showPatch"),
+        dryCut: document.getElementById("dryCut"),
+        size: document.getElementById("size"),
+        deform: document.getElementById("deform"),
+        lag: document.getElementById("lag"),
+        density: document.getElementById("density"),
+        roughness: document.getElementById("roughness"),
+        dryness: document.getElementById("dryness"),
+        mousePressure: document.getElementById("mousePressure"),
+      };
+
+      const outputs = {
+        size: document.getElementById("sizeOut"),
+        deform: document.getElementById("deformOut"),
+        lag: document.getElementById("lagOut"),
+        density: document.getElementById("densityOut"),
+        roughness: document.getElementById("roughnessOut"),
+        dryness: document.getElementById("drynessOut"),
+        mousePressure: document.getElementById("mousePressureOut"),
+        hudPressure: document.getElementById("hudPressure"),
+        hudSpeed: document.getElementById("hudSpeed"),
+        hudWidth: document.getElementById("hudWidth"),
+        hudLength: document.getElementById("hudLength"),
+        logPointer: document.getElementById("logPointer"),
+        logTilt: document.getElementById("logTilt"),
+        logTwist: document.getElementById("logTwist"),
+        logSamples: document.getElementById("logSamples"),
+      };
+
+      const settings = {
+        showPatch: true,
+        dryCut: true,
+        size: 42,
+        deform: 1,
+        lag: 0.42,
+        density: 0.2,
+        roughness: 0.24,
+        dryness: 0.28,
+        mousePressure: 0.48,
+      };
+
+      const brush = {
+        drawing: false,
+        pointerId: null,
+        last: null,
+        sampleCount: 0,
+        dirX: 0,
+        dirY: -1,
+        width: 4,
+        length: 4,
+        wedge: 0,
+        pressure: 0,
+        speed: 0,
+        tiltX: 0,
+        tiltY: 0,
+        twist: 0,
+        pointerType: "-",
+      };
+
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+      const lerp = (a, b, t) => a + (b - a) * t;
+      const hypot = Math.hypot;
+
+      function normalize(x, y, fallbackX = 0, fallbackY = -1) {
+        const length = hypot(x, y);
+        if (length < 0.0001) return { x: fallbackX, y: fallbackY };
+        return { x: x / length, y: y / length };
+      }
+
+      function syncSettings() {
+        settings.showPatch = controls.showPatch.checked;
+        settings.dryCut = controls.dryCut.checked;
+        for (const key of ["size", "deform", "lag", "density", "roughness", "dryness", "mousePressure"]) {
+          settings[key] = Number(controls[key].value);
+          outputs[key].textContent = settings[key].toFixed(key === "size" ? 0 : 2);
+        }
+      }
+
+      function applyPreset(kind) {
+        const preset =
+          kind === "soft"
+            ? { size: 52, deform: 1.42, lag: 0.56, density: 0.17, roughness: 0.3, dryness: 0.36 }
+            : { size: 34, deform: 0.58, lag: 0.24, density: 0.23, roughness: 0.16, dryness: 0.16 };
+        for (const [key, value] of Object.entries(preset)) controls[key].value = String(value);
+        syncSettings();
+      }
+
+      function resizeCanvases() {
+        const rect = stage.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+        for (const canvas of [inkCanvas, overlayCanvas]) {
+          const oldWidth = canvas.width;
+          const oldHeight = canvas.height;
+          const old = oldWidth && oldHeight ? document.createElement("canvas") : null;
+          if (old) {
+            old.width = oldWidth;
+            old.height = oldHeight;
+            old.getContext("2d").drawImage(canvas, 0, 0);
+          }
+          canvas.width = Math.max(1, Math.round(rect.width * dpr));
+          canvas.height = Math.max(1, Math.round(rect.height * dpr));
+          const ctx = canvas.getContext("2d");
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          if (old && canvas === inkCanvas) {
+            ctx.drawImage(old, 0, 0, oldWidth / dpr, oldHeight / dpr, 0, 0, rect.width, rect.height);
+          }
+        }
+        drawOverlay();
+      }
+
+      function clearInk() {
+        const rect = stage.getBoundingClientRect();
+        ink.clearRect(0, 0, rect.width, rect.height);
+        overlay.clearRect(0, 0, rect.width, rect.height);
+      }
+
+      function exportPng() {
+        const rect = stage.getBoundingClientRect();
+        const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+        const exportCanvas = document.createElement("canvas");
+        exportCanvas.width = Math.round(rect.width * dpr);
+        exportCanvas.height = Math.round(rect.height * dpr);
+        const ctx = exportCanvas.getContext("2d");
+        ctx.scale(dpr, dpr);
+        ctx.fillStyle = "#f4efe3";
+        ctx.fillRect(0, 0, rect.width, rect.height);
+        ctx.drawImage(inkCanvas, 0, 0, rect.width, rect.height);
+        const link = document.createElement("a");
+        link.download = `brush-contact-${new Date().toISOString().slice(0, 19).replaceAll(":", "-")}.png`;
+        link.href = exportCanvas.toDataURL("image/png");
+        link.click();
+      }
+
+      function getLocalPoint(event) {
+        const rect = overlayCanvas.getBoundingClientRect();
+        return {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+      }
+
+      function extractSample(event) {
+        const point = getLocalPoint(event);
+        let pressure = typeof event.pressure === "number" ? event.pressure : 0;
+        const isPen = event.pointerType === "pen";
+        if (!isPen) pressure = settings.mousePressure;
+        if (brush.drawing && pressure <= 0) pressure = isPen ? 0.03 : settings.mousePressure;
+
+        const altitude =
+          typeof event.altitudeAngle === "number" && Number.isFinite(event.altitudeAngle)
+            ? event.altitudeAngle
+            : null;
+        const azimuth =
+          typeof event.azimuthAngle === "number" && Number.isFinite(event.azimuthAngle)
+            ? event.azimuthAngle
+            : null;
+        let tiltX = typeof event.tiltX === "number" ? event.tiltX : 0;
+        let tiltY = typeof event.tiltY === "number" ? event.tiltY : 0;
+
+        if (altitude !== null && azimuth !== null) {
+          const tiltAmount = clamp(1 - altitude / (Math.PI / 2), 0, 1);
+          tiltX = Math.sin(azimuth) * 90 * tiltAmount;
+          tiltY = -Math.cos(azimuth) * 90 * tiltAmount;
+        }
+
+        return {
+          x: point.x,
+          y: point.y,
+          t: event.timeStamp || performance.now(),
+          pressure: clamp(pressure, 0, 1),
+          tiltX,
+          tiltY,
+          twist: typeof event.twist === "number" ? event.twist : 0,
+          pointerType: event.pointerType || "unknown",
+        };
+      }
+
+      function targetShape(sample, previous) {
+        const dt = previous ? Math.max(1, sample.t - previous.t) : 16;
+        const dx = previous ? sample.x - previous.x : 0;
+        const dy = previous ? sample.y - previous.y : -0.01;
+        const distance = hypot(dx, dy);
+        const speed = clamp(distance / dt, 0, 4);
+        const motion = distance > 0.24 ? normalize(dx, dy, brush.dirX, brush.dirY) : { x: brush.dirX, y: brush.dirY };
+        const tiltMag = clamp(hypot(sample.tiltX, sample.tiltY) / 90, 0, 1);
+        const tilt = normalize(sample.tiltX, sample.tiltY, motion.x, motion.y);
+        const motionWeight = clamp(speed / 0.7, 0, 1);
+        const tiltWeight = clamp(tiltMag * 1.15, 0, 1);
+        const direction = normalize(
+          motion.x * (0.72 + motionWeight) + tilt.x * (0.28 + tiltWeight),
+          motion.y * (0.72 + motionWeight) + tilt.y * (0.28 + tiltWeight),
+          brush.dirX,
+          brush.dirY,
+        );
+
+        const p = Math.pow(clamp(sample.pressure, 0, 1), 0.72);
+        const size = settings.size;
+        const spread = size * (0.13 + p * 0.98) * (1 + tiltMag * 0.28 * settings.deform);
+        const dragStretch = clamp(speed * 0.55, 0, 1.4);
+        const tiltStretch = tiltMag * 1.35;
+        const length =
+          size *
+          (0.16 + p * 0.42 + settings.deform * (tiltStretch * 0.58 + dragStretch * 0.52 + p * tiltMag * 0.34));
+        const wedge = clamp(settings.deform * (tiltMag * 0.68 + motionWeight * 0.5 + p * 0.24), 0, 1);
+
+        return {
+          dirX: direction.x,
+          dirY: direction.y,
+          width: clamp(spread, 2.5, size * 1.75),
+          length: clamp(Math.max(length, spread * lerp(0.92, 1.8, wedge)), 2.5, size * 2.55),
+          wedge,
+          pressure: sample.pressure,
+          speed,
+          tiltX: sample.tiltX,
+          tiltY: sample.tiltY,
+          twist: sample.twist,
+          pointerType: sample.pointerType,
+        };
+      }
+
+      function settleBrush(target) {
+        const response = clamp(1 - settings.lag, 0.08, 0.76);
+        const dir = normalize(
+          lerp(brush.dirX, target.dirX, response * 0.72),
+          lerp(brush.dirY, target.dirY, response * 0.72),
+          target.dirX,
+          target.dirY,
+        );
+        brush.dirX = dir.x;
+        brush.dirY = dir.y;
+        brush.width = lerp(brush.width, target.width, response);
+        brush.length = lerp(brush.length, target.length, response);
+        brush.wedge = lerp(brush.wedge, target.wedge, response);
+        brush.pressure = target.pressure;
+        brush.speed = target.speed;
+        brush.tiltX = target.tiltX;
+        brush.tiltY = target.tiltY;
+        brush.twist = target.twist;
+        brush.pointerType = target.pointerType;
+      }
+
+      function contactPath(x, y, model, scale = 1, offset = 0) {
+        const dirX = model.dirX;
+        const dirY = model.dirY;
+        const perpX = -dirY;
+        const perpY = dirX;
+        const width = model.width * scale;
+        const length = model.length * scale;
+        const wedge = model.wedge;
+        const cx = x + perpX * offset;
+        const cy = y + perpY * offset;
+
+        if (wedge < 0.16) {
+          const path = new Path2D();
+          path.ellipse(cx, cy, width * 0.5, Math.max(width * 0.44, length * 0.5), Math.atan2(dirY, dirX), 0, Math.PI * 2);
+          return path;
+        }
+
+        const forward = length * lerp(0.22, 0.42, wedge);
+        const back = length - forward;
+        const tipW = width * lerp(0.42, 0.08, wedge);
+        const shoulderW = width * lerp(0.46, 0.64, wedge);
+        const baseW = width * 0.5;
+        const tip = { x: cx + dirX * forward, y: cy + dirY * forward };
+        const base = { x: cx - dirX * back, y: cy - dirY * back };
+        const shoulder = { x: cx - dirX * back * 0.16, y: cy - dirY * back * 0.16 };
+        const leftBase = { x: base.x + perpX * baseW, y: base.y + perpY * baseW };
+        const rightBase = { x: base.x - perpX * baseW, y: base.y - perpY * baseW };
+        const leftTip = { x: tip.x + perpX * tipW, y: tip.y + perpY * tipW };
+        const rightTip = { x: tip.x - perpX * tipW, y: tip.y - perpY * tipW };
+        const leftShoulder = { x: shoulder.x + perpX * shoulderW, y: shoulder.y + perpY * shoulderW };
+        const rightShoulder = { x: shoulder.x - perpX * shoulderW, y: shoulder.y - perpY * shoulderW };
+
+        const path = new Path2D();
+        path.moveTo(leftTip.x, leftTip.y);
+        path.bezierCurveTo(
+          cx + dirX * forward * 0.34 + perpX * width * 0.2,
+          cy + dirY * forward * 0.34 + perpY * width * 0.2,
+          leftShoulder.x,
+          leftShoulder.y,
+          leftBase.x,
+          leftBase.y,
+        );
+        path.quadraticCurveTo(base.x - dirX * width * 0.16, base.y - dirY * width * 0.16, rightBase.x, rightBase.y);
+        path.bezierCurveTo(
+          rightShoulder.x,
+          rightShoulder.y,
+          cx + dirX * forward * 0.34 - perpX * width * 0.2,
+          cy + dirY * forward * 0.34 - perpY * width * 0.2,
+          rightTip.x,
+          rightTip.y,
+        );
+        path.quadraticCurveTo(tip.x + dirX * tipW * 0.2, tip.y + dirY * tipW * 0.2, leftTip.x, leftTip.y);
+        path.closePath();
+        return path;
+      }
+
+      function drawDryCuts(ctx, x, y, model) {
+        if (!settings.dryCut || settings.dryness <= 0.01) return;
+        const cutStrength = settings.dryness * clamp(model.speed * 0.5 + model.wedge * 0.8, 0, 1);
+        if (cutStrength <= 0.01) return;
+        const dirX = model.dirX;
+        const dirY = model.dirY;
+        const perpX = -dirY;
+        const perpY = dirX;
+        const cuts = 1 + Math.floor(cutStrength * 5);
+
+        ctx.save();
+        ctx.globalCompositeOperation = "destination-out";
+        ctx.globalAlpha = clamp(0.08 + cutStrength * 0.22, 0, 0.34);
+        ctx.lineCap = "round";
+        for (let i = 0; i < cuts; i += 1) {
+          const lane = (Math.random() - 0.5) * model.width * 0.62;
+          const wobble = (Math.random() - 0.5) * model.width * 0.15;
+          const startBack = model.length * (0.24 + Math.random() * 0.38);
+          const endForward = model.length * (0.12 + Math.random() * 0.24);
+          ctx.lineWidth = Math.max(0.7, model.width * (0.018 + Math.random() * 0.026));
+          ctx.beginPath();
+          ctx.moveTo(x - dirX * startBack + perpX * lane, y - dirY * startBack + perpY * lane);
+          ctx.quadraticCurveTo(
+            x + perpX * (lane + wobble),
+            y + perpY * (lane + wobble),
+            x + dirX * endForward + perpX * (lane * 0.44),
+            y + dirY * endForward + perpY * (lane * 0.44),
+          );
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function drawFootprint(ctx, x, y, model) {
+        const splitChance = clamp(settings.roughness * 0.32 + model.wedge * model.pressure * 0.22, 0, 0.48);
+        const split = Math.random() < splitChance && model.width > 10;
+        const alpha = clamp(settings.density * (0.38 + model.pressure * 1.18), 0.02, 0.8);
+        const dirX = model.dirX;
+        const dirY = model.dirY;
+        const perpX = -dirY;
+        const perpY = dirX;
+
+        ctx.save();
+        ctx.fillStyle = "#111411";
+        ctx.globalAlpha = alpha;
+
+        if (split) {
+          const gap = model.width * clamp(0.12 + settings.roughness * 0.15, 0.08, 0.3);
+          const left = { ...model, width: model.width * 0.43, length: model.length * 0.96 };
+          const right = { ...model, width: model.width * 0.38, length: model.length * 0.9 };
+          ctx.fill(contactPath(x + perpX * gap, y + perpY * gap, left));
+          ctx.globalAlpha = alpha * 0.84;
+          ctx.fill(contactPath(x - perpX * gap * 1.1, y - perpY * gap * 1.1, right));
+        } else {
+          ctx.fill(contactPath(x, y, model));
+        }
+
+        if (settings.roughness > 0.02 && model.width > 5) {
+          ctx.globalAlpha = alpha * settings.roughness * 0.3;
+          const flecks = Math.floor(1 + settings.roughness * 5);
+          for (let i = 0; i < flecks; i += 1) {
+            const along = (Math.random() - 0.6) * model.length * 0.72;
+            const side = (Math.random() - 0.5) * model.width * 0.85;
+            const radius = Math.max(0.5, model.width * (0.025 + Math.random() * 0.05));
+            ctx.beginPath();
+            ctx.ellipse(
+              x + dirX * along + perpX * side,
+              y + dirY * along + perpY * side,
+              radius * (1 + model.wedge),
+              radius * 0.72,
+              Math.atan2(dirY, dirX),
+              0,
+              Math.PI * 2,
+            );
+            ctx.fill();
+          }
+        }
+
+        drawDryCuts(ctx, x, y, model);
+        ctx.restore();
+      }
+
+      function drawOverlay(x = null, y = null) {
+        const rect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, rect.width, rect.height);
+        if (!settings.showPatch || !brush.drawing || x === null || y === null) return;
+
+        const model = {
+          dirX: brush.dirX,
+          dirY: brush.dirY,
+          width: brush.width,
+          length: brush.length,
+          wedge: brush.wedge,
+        };
+        const path = contactPath(x, y, model);
+        overlay.save();
+        overlay.fillStyle = "rgba(215, 119, 44, 0.22)";
+        overlay.strokeStyle = "rgba(126, 61, 12, 0.72)";
+        overlay.lineWidth = 1.5;
+        overlay.fill(path);
+        overlay.stroke(path);
+        overlay.strokeStyle = "rgba(40, 32, 20, 0.5)";
+        overlay.lineWidth = 1;
+        overlay.beginPath();
+        overlay.moveTo(x - brush.dirX * brush.length * 0.66, y - brush.dirY * brush.length * 0.66);
+        overlay.lineTo(x + brush.dirX * brush.length * 0.46, y + brush.dirY * brush.length * 0.46);
+        overlay.stroke();
+        overlay.fillStyle = "rgba(30, 24, 16, 0.62)";
+        overlay.beginPath();
+        overlay.arc(x, y, 2.2, 0, Math.PI * 2);
+        overlay.fill();
+        overlay.restore();
+      }
+
+      function updateHud() {
+        outputs.hudPressure.textContent = brush.pressure.toFixed(2);
+        outputs.hudSpeed.textContent = Math.round(brush.speed * 1000).toString();
+        outputs.hudWidth.textContent = `${Math.round(brush.width)}px`;
+        outputs.hudLength.textContent = `${Math.round(brush.length)}px`;
+        outputs.logPointer.textContent = brush.pointerType;
+        outputs.logTilt.textContent = `${Math.round(brush.tiltX)} / ${Math.round(brush.tiltY)}`;
+        outputs.logTwist.textContent = Math.round(brush.twist).toString();
+        outputs.logSamples.textContent = brush.sampleCount.toString();
+      }
+
+      function processSample(sample) {
+        if (!brush.last) {
+          brush.last = sample;
+          const target = targetShape(sample, null);
+          brush.dirX = target.dirX;
+          brush.dirY = target.dirY;
+          brush.width = target.width;
+          brush.length = target.length;
+          brush.wedge = target.wedge;
+          settleBrush(target);
+          drawFootprint(ink, sample.x, sample.y, brush);
+          drawOverlay(sample.x, sample.y);
+          updateHud();
+          return;
+        }
+
+        const previous = brush.last;
+        const distance = hypot(sample.x - previous.x, sample.y - previous.y);
+        const steps = Math.max(1, Math.ceil(distance / Math.max(1.8, brush.width * 0.22)));
+
+        for (let i = 1; i <= steps; i += 1) {
+          const t = i / steps;
+          const point = {
+            x: lerp(previous.x, sample.x, t),
+            y: lerp(previous.y, sample.y, t),
+            t: lerp(previous.t, sample.t, t),
+            pressure: lerp(previous.pressure, sample.pressure, t),
+            tiltX: lerp(previous.tiltX, sample.tiltX, t),
+            tiltY: lerp(previous.tiltY, sample.tiltY, t),
+            twist: lerp(previous.twist, sample.twist, t),
+            pointerType: sample.pointerType,
+          };
+          const target = targetShape(point, brush.last);
+          settleBrush(target);
+          drawFootprint(ink, point.x, point.y, brush);
+          brush.sampleCount += 1;
+        }
+
+        brush.last = sample;
+        drawOverlay(sample.x, sample.y);
+        updateHud();
+      }
+
+      function onPointerDown(event) {
+        if (brush.drawing) return;
+        event.preventDefault();
+        overlayCanvas.setPointerCapture(event.pointerId);
+        brush.drawing = true;
+        brush.pointerId = event.pointerId;
+        brush.last = null;
+        const sample = extractSample(event);
+        processSample(sample);
+      }
+
+      function onPointerMove(event) {
+        if (!brush.drawing || event.pointerId !== brush.pointerId) return;
+        event.preventDefault();
+        const events =
+          typeof event.getCoalescedEvents === "function" && event.getCoalescedEvents().length
+            ? event.getCoalescedEvents()
+            : [event];
+        for (const coalesced of events) processSample(extractSample(coalesced));
+      }
+
+      function finishStroke(event) {
+        if (!brush.drawing || event.pointerId !== brush.pointerId) return;
+        brush.drawing = false;
+        brush.pointerId = null;
+        brush.last = null;
+        const rect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, rect.width, rect.height);
+        updateHud();
+      }
+
+      for (const input of Object.values(controls)) {
+        input.addEventListener("input", syncSettings);
+        input.addEventListener("change", syncSettings);
+      }
+      document.getElementById("clearButton").addEventListener("click", clearInk);
+      document.getElementById("saveButton").addEventListener("click", exportPng);
+      document.getElementById("softPreset").addEventListener("click", () => applyPreset("soft"));
+      document.getElementById("firmPreset").addEventListener("click", () => applyPreset("firm"));
+
+      overlayCanvas.addEventListener("pointerdown", onPointerDown, { passive: false });
+      overlayCanvas.addEventListener("pointermove", onPointerMove, { passive: false });
+      overlayCanvas.addEventListener("pointerup", finishStroke, { passive: false });
+      overlayCanvas.addEventListener("pointercancel", finishStroke, { passive: false });
+      overlayCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
+      window.addEventListener("resize", resizeCanvases);
+      window.addEventListener("orientationchange", () => window.setTimeout(resizeCanvases, 180));
+
+      syncSettings();
+      resizeCanvases();
+      updateHud();
+    </script>
+  </body>
+</html>
