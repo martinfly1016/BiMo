@@ -425,7 +425,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.4</h2>
+          <h2>BiMo Contact Patch v0.5</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -757,7 +757,8 @@
         const dy = previous ? sample.y - previous.y : -0.01;
         const distance = hypot(dx, dy);
         const speed = clamp(distance / dt, 0, 4);
-        const motion = distance > 0.24 ? normalize(dx, dy, brush.dirX, brush.dirY) : { x: brush.dirX, y: brush.dirY };
+        const movement = distance > 0.24 ? normalize(dx, dy, -brush.dirX, -brush.dirY) : { x: -brush.dirX, y: -brush.dirY };
+        const tipDirection = { x: -movement.x, y: -movement.y };
         const rawTiltMag = clamp(hypot(sample.tiltX, sample.tiltY) / 90, 0, 1);
         const tiltSign = settings.invertTilt ? -1 : 1;
         const rotation = (settings.tiltRotation * Math.PI) / 180;
@@ -765,7 +766,7 @@
         const rawTiltY = sample.tiltY * tiltSign;
         const tiltX = rawTiltX * Math.cos(rotation) - rawTiltY * Math.sin(rotation);
         const tiltY = rawTiltX * Math.sin(rotation) + rawTiltY * Math.cos(rotation);
-        const rawTilt = normalize(tiltX, tiltY, motion.x, motion.y);
+        const rawTilt = normalize(tiltX, tiltY, tipDirection.x, tipDirection.y);
         const tiltConfidence = smoothstep(0.18, 0.72, rawTiltMag);
         const magResponse = lerp(0.3, 0.045, settings.tiltStability);
         brush.stableTiltMag = lerp(brush.stableTiltMag, rawTiltMag, magResponse);
@@ -793,8 +794,8 @@
         const motionWeight = clamp(speed / 0.7, 0, 1);
         const tiltWeight = settings.tiltInfluence * smoothstep(0.24, 0.85, tiltMag) * 0.75;
         const direction = normalize(
-          motion.x * (0.96 + motionWeight) + tilt.x * tiltWeight,
-          motion.y * (0.96 + motionWeight) + tilt.y * tiltWeight,
+          tipDirection.x * (0.96 + motionWeight) + tilt.x * tiltWeight,
+          tipDirection.y * (0.96 + motionWeight) + tilt.y * tiltWeight,
           brush.dirX,
           brush.dirY,
         );
