@@ -426,7 +426,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.7</h2>
+          <h2>BiMo Contact Patch v0.8</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -1078,7 +1078,8 @@
 
         const previous = brush.last;
         const distance = hypot(sample.x - previous.x, sample.y - previous.y);
-        const steps = Math.max(1, Math.ceil(distance / Math.max(1.8, brush.width * 0.22)));
+        const stampSpacing = clamp(brush.width * 0.055, 1.15, 3.2);
+        const steps = Math.max(1, Math.ceil(distance / stampSpacing));
 
         for (let i = 1; i <= steps; i += 1) {
           const t = i / steps;

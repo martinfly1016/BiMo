@@ -24,6 +24,7 @@ Then open the local URL from iPad Safari on the same network.
 - Stationary vertical pressure stays round instead of switching into a wedge
 - Smoothed contact-intent model separates pressure expansion, drag deformation, and sustained oblique contact
 - Turn-aware spreading for hook and stroke-transition moments
+- Dense stamp interpolation for smoother high-pressure stroke edges
 - Brush deformation lag
 - Live contact patch overlay
 - Basic ink deposition, dry cuts, rough edges, and soft/firm brush presets
