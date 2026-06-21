@@ -426,7 +426,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.8</h2>
+          <h2>BiMo Contact Patch v0.9</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -598,6 +598,7 @@
         drawing: false,
         pointerId: null,
         last: null,
+        inkPoint: null,
         sampleCount: 0,
         dirX: 0,
         dirY: -1,
@@ -968,10 +969,33 @@
         ctx.restore();
       }
 
+      function drawWetBridge(ctx, from, to, model) {
+        if (!from) return;
+        const distance = hypot(to.x - from.x, to.y - from.y);
+        if (distance < 0.01) return;
+        const alpha = clamp(settings.density * (0.72 + model.pressure * 1.18), 0.04, 0.82);
+        const lineWidth = Math.max(1.2, (from.width + model.width) * 0.5 * 0.98);
+
+        ctx.save();
+        ctx.strokeStyle = "#111411";
+        ctx.globalAlpha = alpha;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.lineWidth = lineWidth;
+        ctx.beginPath();
+        ctx.moveTo(from.x, from.y);
+        ctx.lineTo(to.x, to.y);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       function drawFootprint(ctx, x, y, model) {
-        const splitChance = clamp(settings.roughness * 0.32 + model.wedge * model.pressure * 0.22, 0, 0.48);
+        const heavyPress = smoothstep(0.52, 0.92, model.pressure);
+        const stampScale = lerp(1, 0.68, heavyPress);
+        const splitChance =
+          (1 - heavyPress) * clamp(settings.roughness * 0.32 + model.wedge * model.pressure * 0.22, 0, 0.48);
         const split = Math.random() < splitChance && model.width > 10;
-        const alpha = clamp(settings.density * (0.38 + model.pressure * 1.18), 0.02, 0.8);
+        const alpha = clamp(settings.density * (0.22 + model.pressure * 0.62), 0.015, 0.36);
         const dirX = model.dirX;
         const dirY = model.dirY;
         const perpX = -dirY;
@@ -982,14 +1006,14 @@
         ctx.globalAlpha = alpha;
 
         if (split) {
-          const gap = model.width * clamp(0.12 + settings.roughness * 0.15, 0.08, 0.3);
+          const gap = model.width * stampScale * clamp(0.12 + settings.roughness * 0.15, 0.08, 0.3);
           const left = { ...model, width: model.width * 0.43, length: model.length * 0.96 };
           const right = { ...model, width: model.width * 0.38, length: model.length * 0.9 };
-          ctx.fill(contactPath(x + perpX * gap, y + perpY * gap, left));
+          ctx.fill(contactPath(x + perpX * gap, y + perpY * gap, left, stampScale));
           ctx.globalAlpha = alpha * 0.84;
-          ctx.fill(contactPath(x - perpX * gap * 1.1, y - perpY * gap * 1.1, right));
+          ctx.fill(contactPath(x - perpX * gap * 1.1, y - perpY * gap * 1.1, right, stampScale));
         } else {
-          ctx.fill(contactPath(x, y, model));
+          ctx.fill(contactPath(x, y, model, stampScale));
         }
 
         if (settings.roughness > 0.02 && model.width > 5) {
@@ -1071,6 +1095,7 @@
           brush.wedge = target.wedge;
           settleBrush(target);
           drawFootprint(ink, sample.x, sample.y, brush);
+          brush.inkPoint = { x: sample.x, y: sample.y, width: brush.width };
           drawOverlay(sample.x, sample.y);
           updateHud();
           return;
@@ -1095,7 +1120,9 @@
           };
           const target = targetShape(point, brush.last);
           settleBrush(target);
+          drawWetBridge(ink, brush.inkPoint, point, brush);
           drawFootprint(ink, point.x, point.y, brush);
+          brush.inkPoint = { x: point.x, y: point.y, width: brush.width };
           brush.sampleCount += 1;
         }
 
@@ -1106,6 +1133,7 @@
 
       function resetModelState() {
         brush.last = null;
+        brush.inkPoint = null;
         brush.dirX = 0;
         brush.dirY = -1;
         brush.width = 4;
