@@ -426,7 +426,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.11</h2>
+          <h2>BiMo Contact Patch v0.12</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -606,6 +606,7 @@
         width: 4,
         length: 4,
         wedge: 0,
+        pointed: 0,
         pressure: 0,
         speed: 0,
         tiltX: 0,
@@ -741,7 +742,7 @@
       function runYongDemo() {
         clearInk();
         brush.sampleCount = 0;
-        const demoPreset = { size: 32, deform: 0.92, lag: 0.34, density: 0.24, roughness: 0.07, dryness: 0.06 };
+        const demoPreset = { size: 34, deform: 0.92, lag: 0.34, density: 0.34, roughness: 0.03, dryness: 0.02 };
         for (const [key, value] of Object.entries(demoPreset)) controls[key].value = String(value);
         syncSettings();
         const rect = stage.getBoundingClientRect();
@@ -918,6 +919,9 @@
         const p = Math.pow(clamp(sample.pressure, 0, 1), 0.72);
         const movementIntent = smoothstep(0.18, 0.95, speed);
         const pressureIntent = smoothstep(0.12, 0.44, p);
+        const pressureDrop = previous ? Math.max(0, previous.pressure - sample.pressure) : 0;
+        const liftIntent = smoothstep(0.015, 0.12, pressureDrop) * movementIntent;
+        const pointed = clamp(liftIntent + (1 - pressureIntent) * movementIntent * 0.72, 0, 1);
         const turnSignal = clamp(1 - (tipDirection.x * brush.dirX + tipDirection.y * brush.dirY), 0, 2) * 0.5;
         const targetTurnHold = smoothstep(0.18, 0.72, turnSignal) * movementIntent * pressureIntent;
         const turnResponse = targetTurnHold > brush.turnHold ? 0.18 : 0.42;
@@ -934,22 +938,29 @@
         const memoryWeight = lerp(1.35, 0.18, movementIntent);
         const dragWeight = movementIntent * lerp(0.95, 1.55, pressureIntent);
         const tiltWeight = settings.tiltInfluence * smoothstep(0.46, 0.9, tiltMag) * obliqueGate * 0.9;
+        const bristleTip = normalize(
+          tipDirection.x * (1 - liftIntent) + movement.x * liftIntent,
+          tipDirection.y * (1 - liftIntent) + movement.y * liftIntent,
+          tipDirection.x,
+          tipDirection.y,
+        );
         const direction = normalize(
-          brush.dirX * memoryWeight + tipDirection.x * dragWeight + tilt.x * tiltWeight,
-          brush.dirY * memoryWeight + tipDirection.y * dragWeight + tilt.y * tiltWeight,
+          brush.dirX * memoryWeight + bristleTip.x * dragWeight + tilt.x * tiltWeight,
+          brush.dirY * memoryWeight + bristleTip.y * dragWeight + tilt.y * tiltWeight,
           brush.dirX,
           brush.dirY,
         );
 
         const size = settings.size;
         const cornerSpread = brush.turnHold * settings.deform;
-        const spread = size * (0.13 + p * 0.98) * (1 + obliqueAmount * 0.28 * settings.deform + cornerSpread * 0.22);
+        const spread = size * (0.045 + p * 1.05) * (1 + obliqueAmount * 0.28 * settings.deform + cornerSpread * 0.22);
         const dragStretch = clamp(speed * 0.55, 0, 1.4) * movementIntent;
         const tiltStretch = obliqueAmount * 1.35;
         const length =
           size *
-          (0.16 +
+          (0.07 +
             p * 0.42 +
+            pointed * 0.18 +
             settings.deform *
               shapeIntent *
               (tiltStretch * 0.58 + dragStretch * 0.52 + p * obliqueAmount * 0.34 + brush.turnHold * 0.22));
@@ -962,9 +973,10 @@
         return {
           dirX: direction.x,
           dirY: direction.y,
-          width: clamp(spread, 2.5, size * 1.75),
-          length: clamp(Math.max(length, spread * lerp(0.92, 1.8, wedge)), 2.5, size * 2.55),
+          width: clamp(spread, 1.2, size * 1.75),
+          length: clamp(Math.max(length, spread * lerp(0.92, 2.15, Math.max(wedge, pointed * 0.86))), 1.4, size * 2.55),
           wedge,
+          pointed,
           pressure: sample.pressure,
           speed,
           tiltX: sample.tiltX,
@@ -988,6 +1000,7 @@
         brush.width = lerp(brush.width, target.width, response);
         brush.length = lerp(brush.length, target.length, response);
         brush.wedge = lerp(brush.wedge, target.wedge, shapeResponse);
+        brush.pointed = lerp(brush.pointed || 0, target.pointed || 0, shapeResponse);
         brush.pressure = target.pressure;
         brush.speed = target.speed;
         brush.tiltX = target.tiltX;
@@ -1004,10 +1017,41 @@
         const width = model.width * scale;
         const length = model.length * scale;
         const wedge = model.wedge;
+        const pointed = clamp(model.pointed || 0, 0, 1);
         const cx = x + perpX * offset;
         const cy = y + perpY * offset;
 
         if (wedge < 0.16) {
+          if (pointed > 0.18) {
+            const path = new Path2D();
+            const forward = length * lerp(0.48, 0.82, pointed);
+            const back = length * lerp(0.44, 0.16, pointed);
+            const belly = width * 0.5;
+            const tipW = width * lerp(0.3, 0.02, pointed);
+            const tailW = width * lerp(0.34, 0.08, pointed);
+            const tip = { x: cx + dirX * forward, y: cy + dirY * forward };
+            const tail = { x: cx - dirX * back, y: cy - dirY * back };
+            path.moveTo(tip.x + perpX * tipW, tip.y + perpY * tipW);
+            path.bezierCurveTo(
+              cx + dirX * forward * 0.22 + perpX * belly,
+              cy + dirY * forward * 0.22 + perpY * belly,
+              tail.x + perpX * tailW,
+              tail.y + perpY * tailW,
+              tail.x,
+              tail.y,
+            );
+            path.bezierCurveTo(
+              tail.x - perpX * tailW,
+              tail.y - perpY * tailW,
+              cx + dirX * forward * 0.22 - perpX * belly,
+              cy + dirY * forward * 0.22 - perpY * belly,
+              tip.x - perpX * tipW,
+              tip.y - perpY * tipW,
+            );
+            path.quadraticCurveTo(tip.x + dirX * tipW * 0.2, tip.y + dirY * tipW * 0.2, tip.x + perpX * tipW, tip.y + perpY * tipW);
+            path.closePath();
+            return path;
+          }
           const path = new Path2D();
           path.ellipse(cx, cy, width * 0.5, Math.max(width * 0.44, length * 0.5), Math.atan2(dirY, dirX), 0, Math.PI * 2);
           return path;
@@ -1090,18 +1134,22 @@
         const distance = hypot(to.x - from.x, to.y - from.y);
         if (distance < 0.01) return;
         const alpha = clamp(settings.density * (0.72 + model.pressure * 1.18), 0.04, 0.82);
-        const lineWidth = Math.max(1.2, (from.width + model.width) * 0.5 * 0.98);
+        const dir = normalize(to.x - from.x, to.y - from.y, model.dirX, model.dirY);
+        const perpX = -dir.y;
+        const perpY = dir.x;
+        const fromHalf = Math.max(0.35, from.width * 0.49);
+        const toHalf = Math.max(0.18, model.width * lerp(0.48, 0.18, model.pointed || 0));
 
         ctx.save();
-        ctx.strokeStyle = "#111411";
+        ctx.fillStyle = "#111411";
         ctx.globalAlpha = alpha;
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.lineWidth = lineWidth;
         ctx.beginPath();
-        ctx.moveTo(from.x, from.y);
-        ctx.lineTo(to.x, to.y);
-        ctx.stroke();
+        ctx.moveTo(from.x + perpX * fromHalf, from.y + perpY * fromHalf);
+        ctx.lineTo(to.x + perpX * toHalf, to.y + perpY * toHalf);
+        ctx.lineTo(to.x - perpX * toHalf, to.y - perpY * toHalf);
+        ctx.lineTo(from.x - perpX * fromHalf, from.y - perpY * fromHalf);
+        ctx.closePath();
+        ctx.fill();
         ctx.restore();
       }
 
@@ -1255,6 +1303,7 @@
         brush.width = 4;
         brush.length = 4;
         brush.wedge = 0;
+        brush.pointed = 0;
         brush.speed = 0;
         brush.stableTiltX = 0;
         brush.stableTiltY = -1;
@@ -1278,6 +1327,7 @@
           width: brush.width,
           length: brush.length,
           wedge: brush.wedge,
+          pointed: brush.pointed,
           pressure: brush.pressure,
           speed: brush.speed,
           stableTiltMag: brush.stableTiltMag,

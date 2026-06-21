@@ -27,6 +27,7 @@ Then open the local URL from iPad Safari on the same network.
 - Dense stamp interpolation for smoother high-pressure stroke edges
 - Continuous wet-ink bridge so high-pressure strokes are not outlined by visible stamp beads
 - Scripted Yong character demo that feeds synthetic calligraphy strokes through the same brush model
+- Pointed bristle-exit model inspired by brush construction: a tapered hair bundle with a sharp tip and spreading belly
 - Brush deformation lag
 - Live contact patch overlay
 - Basic ink deposition, dry cuts, rough edges, and soft/firm brush presets
