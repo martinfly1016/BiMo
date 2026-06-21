@@ -22,6 +22,8 @@ Then open the local URL from iPad Safari on the same network.
 - Tilt dead-zone, smoothing, and influence controls to reduce contact patch jitter
 - Drag-aware wedge direction, so fast strokes place the narrow tip behind the movement direction
 - Stationary vertical pressure stays round instead of switching into a wedge
+- Smoothed contact-intent model separates pressure expansion, drag deformation, and sustained oblique contact
+- Turn-aware spreading for hook and stroke-transition moments
 - Brush deformation lag
 - Live contact patch overlay
 - Basic ink deposition, dry cuts, rough edges, and soft/firm brush presets

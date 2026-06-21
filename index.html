@@ -7,6 +7,7 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="BiMo" />
     <title>BiMo - 毛笔接触面测试台</title>
     <style>
@@ -425,7 +426,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.6</h2>
+          <h2>BiMo Contact Patch v0.7</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -611,6 +612,9 @@
         stableTiltY: -1,
         stableTiltMag: 0,
         stableTiltReady: false,
+        obliqueHold: 0,
+        turnHold: 0,
+        shapeIntent: 0,
         twist: 0,
         pointerType: "-",
       };
@@ -771,6 +775,9 @@
         const magResponse = lerp(0.3, 0.045, settings.tiltStability);
         brush.stableTiltMag = lerp(brush.stableTiltMag, rawTiltMag, magResponse);
         const tiltMag = brush.stableTiltMag;
+        const obliqueSignal = smoothstep(0.52, 0.86, rawTiltMag);
+        const obliqueResponse = obliqueSignal > brush.obliqueHold ? 0.12 : 0.3;
+        brush.obliqueHold = lerp(brush.obliqueHold, obliqueSignal, obliqueResponse);
 
         if (tiltConfidence > 0.001) {
           if (!brush.stableTiltReady) {
@@ -791,29 +798,49 @@
         }
 
         const tilt = brush.stableTiltReady ? { x: brush.stableTiltX, y: brush.stableTiltY } : rawTilt;
-        const movementIntent = smoothstep(0.12, 0.72, speed);
-        const tiltIntent = smoothstep(0.32, 0.78, tiltMag) * settings.tiltInfluence;
-        const shapeIntent = clamp(Math.max(movementIntent, tiltIntent), 0, 1);
+        const p = Math.pow(clamp(sample.pressure, 0, 1), 0.72);
+        const movementIntent = smoothstep(0.18, 0.95, speed);
+        const pressureIntent = smoothstep(0.12, 0.44, p);
+        const turnSignal = clamp(1 - (tipDirection.x * brush.dirX + tipDirection.y * brush.dirY), 0, 2) * 0.5;
+        const targetTurnHold = smoothstep(0.18, 0.72, turnSignal) * movementIntent * pressureIntent;
+        const turnResponse = targetTurnHold > brush.turnHold ? 0.18 : 0.42;
+        brush.turnHold = lerp(brush.turnHold, targetTurnHold, turnResponse);
+        const dragIntent = movementIntent * pressureIntent;
+        const obliqueGate = smoothstep(0.18, 0.62, brush.obliqueHold);
+        const obliqueAmount = tiltMag * obliqueGate;
+        const obliqueIntent = smoothstep(0.46, 0.9, tiltMag) * obliqueGate * settings.tiltInfluence;
+        const targetShapeIntent = clamp(Math.max(dragIntent, obliqueIntent), 0, 1);
+        const intentResponse = targetShapeIntent < brush.shapeIntent ? 0.34 : 0.12;
+        brush.shapeIntent = lerp(brush.shapeIntent, targetShapeIntent, intentResponse);
+        const shapeIntent = brush.shapeIntent;
         const motionWeight = movementIntent;
-        const tiltWeight = settings.tiltInfluence * smoothstep(0.24, 0.85, tiltMag) * 0.75;
+        const memoryWeight = lerp(1.35, 0.18, movementIntent);
+        const dragWeight = movementIntent * lerp(0.95, 1.55, pressureIntent);
+        const tiltWeight = settings.tiltInfluence * smoothstep(0.46, 0.9, tiltMag) * obliqueGate * 0.9;
         const direction = normalize(
-          tipDirection.x * (0.96 + movementIntent) + tilt.x * tiltWeight,
-          tipDirection.y * (0.96 + movementIntent) + tilt.y * tiltWeight,
+          brush.dirX * memoryWeight + tipDirection.x * dragWeight + tilt.x * tiltWeight,
+          brush.dirY * memoryWeight + tipDirection.y * dragWeight + tilt.y * tiltWeight,
           brush.dirX,
           brush.dirY,
         );
 
-        const p = Math.pow(clamp(sample.pressure, 0, 1), 0.72);
         const size = settings.size;
-        const spread = size * (0.13 + p * 0.98) * (1 + tiltMag * 0.28 * settings.deform);
+        const cornerSpread = brush.turnHold * settings.deform;
+        const spread = size * (0.13 + p * 0.98) * (1 + obliqueAmount * 0.28 * settings.deform + cornerSpread * 0.22);
         const dragStretch = clamp(speed * 0.55, 0, 1.4) * movementIntent;
-        const tiltStretch = tiltMag * 1.35;
+        const tiltStretch = obliqueAmount * 1.35;
         const length =
           size *
           (0.16 +
             p * 0.42 +
-            settings.deform * shapeIntent * (tiltStretch * 0.58 + dragStretch * 0.52 + p * tiltMag * 0.34));
-        const wedge = clamp(settings.deform * shapeIntent * (tiltMag * 0.68 + motionWeight * 0.5), 0, 1);
+            settings.deform *
+              shapeIntent *
+              (tiltStretch * 0.58 + dragStretch * 0.52 + p * obliqueAmount * 0.34 + brush.turnHold * 0.22));
+        const wedge = clamp(
+          settings.deform * shapeIntent * (obliqueAmount * 0.68 + motionWeight * 0.5 + brush.turnHold * 0.18),
+          0,
+          1,
+        );
 
         return {
           dirX: direction.x,
@@ -1076,15 +1103,52 @@
         updateHud();
       }
 
+      function resetModelState() {
+        brush.last = null;
+        brush.dirX = 0;
+        brush.dirY = -1;
+        brush.width = 4;
+        brush.length = 4;
+        brush.wedge = 0;
+        brush.speed = 0;
+        brush.stableTiltX = 0;
+        brush.stableTiltY = -1;
+        brush.stableTiltMag = 0;
+        brush.stableTiltReady = false;
+        brush.obliqueHold = 0;
+        brush.turnHold = 0;
+        brush.shapeIntent = 0;
+      }
+
+      function simulateModel(samples) {
+        resetModelState();
+        for (const sample of samples) {
+          const target = targetShape(sample, brush.last);
+          settleBrush(target);
+          brush.last = sample;
+        }
+        return {
+          dirX: brush.dirX,
+          dirY: brush.dirY,
+          width: brush.width,
+          length: brush.length,
+          wedge: brush.wedge,
+          pressure: brush.pressure,
+          speed: brush.speed,
+          stableTiltMag: brush.stableTiltMag,
+          obliqueHold: brush.obliqueHold,
+          turnHold: brush.turnHold,
+          shapeIntent: brush.shapeIntent,
+        };
+      }
+
       function onPointerDown(event) {
         if (brush.drawing) return;
         event.preventDefault();
         overlayCanvas.setPointerCapture(event.pointerId);
         brush.drawing = true;
         brush.pointerId = event.pointerId;
-        brush.last = null;
-        brush.stableTiltMag = 0;
-        brush.stableTiltReady = false;
+        resetModelState();
         const sample = extractSample(event);
         processSample(sample);
       }
@@ -1125,6 +1189,8 @@
       overlayCanvas.addEventListener("contextmenu", (event) => event.preventDefault());
       window.addEventListener("resize", resizeCanvases);
       window.addEventListener("orientationchange", () => window.setTimeout(resizeCanvases, 180));
+
+      window.BiMoDebug = { simulate: simulateModel };
 
       syncSettings();
       resizeCanvases();
