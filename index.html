@@ -426,13 +426,14 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v0.9</h2>
+          <h2>BiMo Contact Patch v0.11</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
         <div class="actions">
           <button class="button primary" id="clearButton" type="button">清空</button>
           <button class="button" id="saveButton" type="button">导出</button>
+          <button class="button" id="demoButton" type="button">永字演示</button>
           <button class="button" id="softPreset" type="button">软毫</button>
           <button class="button" id="firmPreset" type="button">硬毫</button>
         </div>
@@ -693,6 +694,121 @@
         const rect = stage.getBoundingClientRect();
         ink.clearRect(0, 0, rect.width, rect.height);
         overlay.clearRect(0, 0, rect.width, rect.height);
+      }
+
+      function cubicPoint(a, b, c, d, t) {
+        const mt = 1 - t;
+        return mt * mt * mt * a + 3 * mt * mt * t * b + 3 * mt * t * t * c + t * t * t * d;
+      }
+
+      function pressureCurve(t, start, middle, end) {
+        return t < 0.5 ? lerp(start, middle, smoothstep(0, 0.5, t)) : lerp(middle, end, smoothstep(0.5, 1, t));
+      }
+
+      function makeDemoStroke(points, options = {}) {
+        const samples = [];
+        const steps = options.steps || Math.max(18, Math.ceil(hypot(points[3].x - points[0].x, points[3].y - points[0].y) / 3.4));
+        for (let i = 0; i <= steps; i += 1) {
+          const t = i / steps;
+          const pressure = options.pressure
+            ? options.pressure(t)
+            : pressureCurve(t, options.startPressure ?? 0.18, options.midPressure ?? 0.68, options.endPressure ?? 0.18);
+          samples.push({
+            x: cubicPoint(points[0].x, points[1].x, points[2].x, points[3].x, t),
+            y: cubicPoint(points[0].y, points[1].y, points[2].y, points[3].y, t),
+            t: i * 15,
+            pressure: clamp(pressure, 0.02, 1),
+            tiltX: options.tiltX ?? 0,
+            tiltY: options.tiltY ?? 0,
+            twist: 0,
+            pointerType: "demo",
+          });
+        }
+        return samples;
+      }
+
+      function drawDemoStroke(samples) {
+        resetModelState();
+        brush.drawing = true;
+        brush.pointerId = "demo";
+        for (const sample of samples) processSample(sample);
+        brush.drawing = false;
+        brush.pointerId = null;
+        brush.last = null;
+        brush.inkPoint = null;
+      }
+
+      function runYongDemo() {
+        clearInk();
+        brush.sampleCount = 0;
+        const demoPreset = { size: 32, deform: 0.92, lag: 0.34, density: 0.24, roughness: 0.07, dryness: 0.06 };
+        for (const [key, value] of Object.entries(demoPreset)) controls[key].value = String(value);
+        syncSettings();
+        const rect = stage.getBoundingClientRect();
+        const scale = clamp(Math.min(rect.width, rect.height) / 640, 0.72, 1.08);
+        const cx = rect.width * 0.5;
+        const cy = rect.height * 0.52;
+        const p = (x, y) => ({ x: cx + x * scale, y: cy + y * scale });
+        const strokes = [
+          makeDemoStroke([p(-18, -156), p(-4, -150), p(18, -138), p(36, -126)], {
+            startPressure: 0.06,
+            midPressure: 0.56,
+            endPressure: 0.08,
+            steps: 22,
+            tiltX: 8,
+          }),
+          makeDemoStroke([p(-64, -88), p(-24, -96), p(22, -96), p(58, -86)], {
+            startPressure: 0.22,
+            midPressure: 0.56,
+            endPressure: 0.2,
+            steps: 38,
+            tiltY: 8,
+          }),
+          makeDemoStroke([p(8, -96), p(4, -48), p(2, 8), p(-2, 68)], {
+            startPressure: 0.18,
+            midPressure: 0.74,
+            endPressure: 0.58,
+            steps: 58,
+          }),
+          makeDemoStroke([p(-2, 68), p(-8, 88), p(-28, 88), p(-42, 68)], {
+            startPressure: 0.72,
+            midPressure: 0.84,
+            endPressure: 0.08,
+            steps: 24,
+          }),
+          makeDemoStroke([p(-18, -26), p(-48, -8), p(-86, 34), p(-120, 86)], {
+            startPressure: 0.26,
+            midPressure: 0.64,
+            endPressure: 0.05,
+            steps: 46,
+            tiltX: -8,
+          }),
+          makeDemoStroke([p(36, -42), p(42, -48), p(54, -66), p(72, -82)], {
+            startPressure: 0.28,
+            midPressure: 0.36,
+            endPressure: 0.08,
+            steps: 16,
+            tiltX: 6,
+          }),
+          makeDemoStroke([p(18, -22), p(42, 2), p(74, 58), p(130, 82)], {
+            startPressure: 0.18,
+            midPressure: 0.58,
+            endPressure: 0.76,
+            steps: 52,
+            tiltX: 10,
+          }),
+          makeDemoStroke([p(130, 82), p(142, 88), p(160, 82), p(176, 68)], {
+            startPressure: 0.68,
+            midPressure: 0.32,
+            endPressure: 0.04,
+            steps: 20,
+          }),
+        ];
+
+        for (const stroke of strokes) drawDemoStroke(stroke);
+        const canvasRect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, canvasRect.width, canvasRect.height);
+        updateHud();
       }
 
       function exportPng() {
@@ -1208,6 +1324,7 @@
       }
       document.getElementById("clearButton").addEventListener("click", clearInk);
       document.getElementById("saveButton").addEventListener("click", exportPng);
+      document.getElementById("demoButton").addEventListener("click", runYongDemo);
       document.getElementById("softPreset").addEventListener("click", () => applyPreset("soft"));
       document.getElementById("firmPreset").addEventListener("click", () => applyPreset("firm"));
 
