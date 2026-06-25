@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.11</h2>
+          <h2>BiMo Contact Patch v10.13</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6022,170 +6022,26 @@
       }
 
       function drawYongReferenceNaiFace(p) {
-        ink.save();
-        ink.fillStyle = "#111411";
-        ink.filter = demoInkMode ? "blur(0.04px)" : "none";
-        const unit = Math.abs(p(1, 0).x - p(0, 0).x) || 1;
-        const spineLift = new Path2D();
-        spineLift.moveTo(p(39, 8).x, p(39, 8).y);
-        spineLift.bezierCurveTo(p(52, 21).x, p(52, 21).y, p(66, 38).x, p(66, 38).y, p(86, 46).x, p(86, 46).y);
-        spineLift.bezierCurveTo(p(101, 52).x, p(101, 52).y, p(112, 52).x, p(112, 52).y, p(122, 49).x, p(122, 49).y);
-        ink.globalCompositeOperation = "source-over";
-        const main = new Path2D();
-        main.moveTo(p(23, -8).x, p(23, -8).y);
-        main.bezierCurveTo(p(41, 7).x, p(41, 7).y, p(78, 28).x, p(78, 28).y, p(124, 38).x, p(124, 38).y);
-        main.bezierCurveTo(p(146, 46).x, p(146, 46).y, p(164, 50).x, p(164, 50).y, p(176, 50).x, p(176, 50).y);
-        main.bezierCurveTo(p(184, 50).x, p(184, 50).y, p(192, 51.4).x, p(192, 51.4).y, p(196, 53).x, p(196, 53).y);
-        main.lineTo(p(192, 61.5).x, p(192, 61.5).y);
-        main.bezierCurveTo(p(176, 66.8).x, p(176, 66.8).y, p(158, 66).x, p(158, 66).y, p(140, 61.8).x, p(140, 61.8).y);
-        main.bezierCurveTo(p(118, 60.4).x, p(118, 60.4).y, p(88, 58).x, p(88, 58).y, p(60, 51.2).x, p(60, 51.2).y);
-        main.bezierCurveTo(p(38, 41).x, p(38, 41).y, p(27, 26).x, p(27, 26).y, p(23, 9.5).x, p(23, 9.5).y);
-        main.bezierCurveTo(p(22, 4).x, p(22, 4).y, p(21, -4).x, p(21, -4).y, p(23, -8).x, p(23, -8).y);
-        main.closePath();
-        ink.globalAlpha = 0.94;
-        ink.fill(main);
-
-        ink.save();
-        ink.clip(main);
-        ink.globalCompositeOperation = "destination-out";
-        ink.strokeStyle = "#000";
-        ink.lineCap = "round";
-        ink.lineJoin = "round";
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.34;
-        ink.beginPath();
-        ink.moveTo(p(63, 45).x, p(63, 45).y);
-        ink.bezierCurveTo(p(84, 54).x, p(84, 54).y, p(105, 58).x, p(105, 58).y, p(125, 55).x, p(125, 55).y);
-        ink.stroke();
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.26;
-        ink.beginPath();
-        ink.moveTo(p(78, 52).x, p(78, 52).y);
-        ink.bezierCurveTo(p(94, 56).x, p(94, 56).y, p(108, 56).x, p(108, 56).y, p(121, 53).x, p(121, 53).y);
-        ink.stroke();
-        for (let i = 0; i < 4; i += 1) {
-          const t = (i + 0.5) / 4;
-          const x = lerp(p(70, 47).x, p(118, 54).x, t);
-          const y = lerp(p(70, 47).y, p(118, 54).y, t) + Math.sin(t * Math.PI) * unit * 2.4;
-          const seed = Math.sin((i + 1) * 19.713) * 43758.5453;
-          const noise = seed - Math.floor(seed);
-          ink.globalAlpha = 0;
-          ink.lineWidth = unit * (0.12 + noise * 0.1);
-          ink.beginPath();
-          ink.moveTo(x, y);
-          ink.quadraticCurveTo(x + unit * (0.6 + noise * 1.2), y + unit * (0.25 + noise * 0.5), x + unit * (1.2 + noise * 1.4), y + unit * (0.45 + noise * 0.6));
-          ink.stroke();
-        }
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.18;
-        ink.beginPath();
-        ink.moveTo(p(103, 61).x, p(103, 61).y);
-        ink.bezierCurveTo(p(114, 62).x, p(114, 62).y, p(126, 60).x, p(126, 60).y, p(136, 56).x, p(136, 56).y);
-        ink.stroke();
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.14;
-        ink.beginPath();
-        ink.moveTo(p(126, 62).x, p(126, 62).y);
-        ink.bezierCurveTo(p(134, 61).x, p(134, 61).y, p(141, 58).x, p(141, 58).y, p(146, 55).x, p(146, 55).y);
-        ink.stroke();
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.24;
-        ink.beginPath();
-        ink.moveTo(p(88, 61).x, p(88, 61).y);
-        ink.lineTo(p(95, 55).x, p(95, 55).y);
-        ink.stroke();
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.2;
-        ink.beginPath();
-        ink.moveTo(p(118, 66).x, p(118, 66).y);
-        ink.lineTo(p(124, 59).x, p(124, 59).y);
-        ink.stroke();
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.18;
-        ink.beginPath();
-        ink.moveTo(p(150, 61).x, p(150, 61).y);
-        ink.lineTo(p(156, 55).x, p(156, 55).y);
-        ink.stroke();
-        ink.restore();
-        drawYongClippedEdgeNicks(main, p, [
-          { start: [78, 58], end: [84, 52], alpha: 0, width: 0.18 },
-          { start: [112, 65], end: [119, 58], alpha: 0, width: 0.18 },
-          { start: [136, 65], end: [143, 58], alpha: 0, width: 0.16 },
+        const body = drawYongOneStrokeBand(
+          p,
+          [
+            { x: 24, y: -7, left: 5.472, right: 11.077, dirX: 0.76, dirY: 0.62 },
+            { x: 37, y: 6.71, left: 8.208, right: 17.002 },
+            { x: 58, y: 23.43, left: 10.488, right: 22.968 },
+            { x: 82, y: 37.14, left: 12.084, right: 27.456 },
+            { x: 111, y: 46.86, left: 10.488, right: 24.816 },
+            { x: 143, y: 51.57, left: 8.892, right: 19.536 },
+            { x: 174, y: 52.29, left: 6.384, right: 13.138 },
+            { x: 196, y: 55, left: 3.192, right: 7.47, dirX: 1, dirY: 0.08 },
+          ],
+          { alpha: 0.97, blur: 0.01 },
+        );
+        if (!body) return;
+        drawYongClippedEdgeNicks(body, p, [
+          { start: [83, 58], end: [91, 52], alpha: 0, width: 0.16 },
+          { start: [116, 64], end: [124, 57], alpha: 0, width: 0.16 },
+          { start: [151, 63], end: [161, 55], alpha: 0, width: 0.12 },
         ]);
-
-        const rootPress = new Path2D();
-        rootPress.moveTo(p(16, -1).x, p(16, -1).y);
-        rootPress.bezierCurveTo(p(28, 9).x, p(28, 9).y, p(46, 24).x, p(46, 24).y, p(66, 37).x, p(66, 37).y);
-        rootPress.bezierCurveTo(p(57, 40).x, p(57, 40).y, p(40, 30).x, p(40, 30).y, p(25, 12).x, p(25, 12).y);
-        rootPress.bezierCurveTo(p(21, 7).x, p(21, 7).y, p(17, 2).x, p(17, 2).y, p(16, -1).x, p(16, -1).y);
-        rootPress.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(rootPress);
-
-        const rootSeal = new Path2D();
-        rootSeal.moveTo(p(17, 0).x, p(17, 0).y);
-        rootSeal.bezierCurveTo(p(25, 7).x, p(25, 7).y, p(36, 18).x, p(36, 18).y, p(48, 28).x, p(48, 28).y);
-        rootSeal.bezierCurveTo(p(43, 31).x, p(43, 31).y, p(31, 22).x, p(31, 22).y, p(22, 9).x, p(22, 9).y);
-        rootSeal.bezierCurveTo(p(18, 4).x, p(18, 4).y, p(16, 1).x, p(16, 1).y, p(17, 0).x, p(17, 0).y);
-        rootSeal.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(rootSeal);
-
-        const entrySpine = new Path2D();
-        entrySpine.moveTo(p(26, 10).x, p(26, 10).y);
-        entrySpine.bezierCurveTo(p(42, 23).x, p(42, 23).y, p(59, 36).x, p(59, 36).y, p(80, 43).x, p(80, 43).y);
-        entrySpine.bezierCurveTo(p(72, 45).x, p(72, 45).y, p(53, 39).x, p(53, 39).y, p(36, 25).x, p(36, 25).y);
-        entrySpine.bezierCurveTo(p(30, 18).x, p(30, 18).y, p(26, 12).x, p(26, 12).y, p(26, 10).x, p(26, 10).y);
-        entrySpine.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(entrySpine);
-
-        const tailPress = new Path2D();
-        tailPress.moveTo(p(108, 49).x, p(108, 49).y);
-        tailPress.bezierCurveTo(p(121, 54).x, p(121, 54).y, p(133, 54).x, p(133, 54).y, p(142, 50).x, p(142, 50).y);
-        tailPress.bezierCurveTo(p(136, 55).x, p(136, 55).y, p(125, 57).x, p(125, 57).y, p(112, 55).x, p(112, 55).y);
-        tailPress.bezierCurveTo(p(108, 54).x, p(108, 54).y, p(106, 51).x, p(106, 51).y, p(108, 49).x, p(108, 49).y);
-        tailPress.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(tailPress);
-
-        const terminalPress = new Path2D();
-        terminalPress.moveTo(p(116, 50).x, p(116, 50).y);
-        terminalPress.bezierCurveTo(p(124, 53).x, p(124, 53).y, p(135, 53).x, p(135, 53).y, p(143, 50).x, p(143, 50).y);
-        terminalPress.bezierCurveTo(p(140, 54).x, p(140, 54).y, p(132, 57).x, p(132, 57).y, p(123, 55).x, p(123, 55).y);
-        terminalPress.bezierCurveTo(p(118, 54).x, p(118, 54).y, p(114, 52).x, p(114, 52).y, p(116, 50).x, p(116, 50).y);
-        terminalPress.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(terminalPress);
-
-        const tailCap = new Path2D();
-        tailCap.moveTo(p(129, 49).x, p(129, 49).y);
-        tailCap.bezierCurveTo(p(136, 48).x, p(136, 48).y, p(145, 48).x, p(145, 48).y, p(148, 50).x, p(148, 50).y);
-        tailCap.bezierCurveTo(p(144, 54).x, p(144, 54).y, p(137, 56).x, p(137, 56).y, p(129, 54).x, p(129, 54).y);
-        tailCap.bezierCurveTo(p(126, 52).x, p(126, 52).y, p(126, 50).x, p(126, 50).y, p(129, 49).x, p(129, 49).y);
-        tailCap.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(tailCap);
-
-        const belly = new Path2D();
-        belly.moveTo(p(59, 35).x, p(59, 35).y);
-        belly.bezierCurveTo(p(80, 49).x, p(80, 49).y, p(105, 58).x, p(105, 58).y, p(139, 51).x, p(139, 51).y);
-        belly.bezierCurveTo(p(124, 57).x, p(124, 57).y, p(94, 56).x, p(94, 56).y, p(65, 45).x, p(65, 45).y);
-        belly.bezierCurveTo(p(60, 41).x, p(60, 41).y, p(58, 37).x, p(58, 37).y, p(59, 35).x, p(59, 35).y);
-        belly.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(belly);
-
-        const entrySoft = new Path2D();
-        entrySoft.moveTo(p(16, -1).x, p(16, -1).y);
-        entrySoft.bezierCurveTo(p(29, 12).x, p(29, 12).y, p(48, 26).x, p(48, 26).y, p(68, 41).x, p(68, 41).y);
-        entrySoft.bezierCurveTo(p(58, 43).x, p(58, 43).y, p(42, 30).x, p(42, 30).y, p(28, 14).x, p(28, 14).y);
-        entrySoft.bezierCurveTo(p(22, 8).x, p(22, 8).y, p(17, 2).x, p(17, 2).y, p(16, -1).x, p(16, -1).y);
-        entrySoft.closePath();
-        ink.globalAlpha = 0;
-        ink.fill(entrySoft);
-        ink.filter = "none";
-        ink.restore();
       }
 
       function trimYongNaiTailHaze(p) {
@@ -6355,14 +6211,14 @@
             { x: -14, y: -44.5, left: 5.184, right: 6.912 },
             { x: 8, y: -44.2, left: 5.616, right: 7.344 },
             { x: 30, y: -38.8, left: 4.536, right: 8.856 },
-            { x: 17.5, y: -29.5, left: 9.9144, right: 7.1928 },
-            { x: 16.2, y: -6, left: 9.1368, right: 7.1928 },
-            { x: 16.2, y: 21, left: 8.9424, right: 6.804 },
-            { x: 15.8, y: 49.85, left: 8.1648, right: 6.2208 },
-            { x: 14.2, y: 69.6, left: 7.776, right: 5.832 },
-            { x: 7.2, y: 81.4, left: 6.696, right: 5.184 },
-            { x: -4.5, y: 79.36, left: 4.968, right: 3.672, dirX: -1, dirY: -0.24 },
-            { x: -11.2, y: 74.55, left: 2.376, right: 3.024, dirX: -1, dirY: -0.12 },
+            { x: 17.5, y: -29.5, left: 9.12125, right: 6.61738 },
+            { x: 16.2, y: -6, left: 8.40586, right: 6.61738 },
+            { x: 16.2, y: 21, left: 8.22701, right: 6.25968 },
+            { x: 15.8, y: 51.45, left: 7.51162, right: 5.72314 },
+            { x: 14.2, y: 72.8, left: 8.24256, right: 6.18192 },
+            { x: 7.2, y: 86.2, left: 7.09776, right: 5.49504 },
+            { x: -4.5, y: 85.76, left: 5.26608, right: 3.89232, dirX: -1, dirY: -0.24 },
+            { x: -11.2, y: 82.55, left: 2.51856, right: 3.20544, dirX: -1, dirY: -0.12 },
           ],
           { alpha: 0.98, blur: 0.01 },
         );
