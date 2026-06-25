@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.09</h2>
+          <h2>BiMo Contact Patch v10.10</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6434,29 +6434,25 @@
       }
 
       function drawYongReferenceSideDotFace(p) {
-        const face = new Path2D();
-        const q = (x, y) => p(72 + (x - 72) * 1.18 - 1, -22 + (y + 22) * 1.28);
-        face.moveTo(q(34.5, -0.2).x, q(34.5, -0.2).y);
-        face.bezierCurveTo(q(46.5, -15).x, q(46.5, -15).y, q(63.5, -38).x, q(63.5, -38).y, q(78.5, -45.5).x, q(78.5, -45.5).y);
-        face.bezierCurveTo(q(91.5, -48.5).x, q(91.5, -48.5).y, q(104.5, -39).x, q(104.5, -39).y, q(106, -29.5).x, q(106, -29.5).y);
-        face.lineTo(q(95.5, -16).x, q(95.5, -16).y);
-        face.bezierCurveTo(q(80.5, -13).x, q(80.5, -13).y, q(62.5, -4.8).x, q(62.5, -4.8).y, q(48, 1.8).x, q(48, 1.8).y);
-        face.bezierCurveTo(q(42, 3.8).x, q(42, 3.8).y, q(36.5, 2.2).x, q(36.5, 2.2).y, q(34.5, -0.2).x, q(34.5, -0.2).y);
-        face.closePath();
-        face.closePath();
-
-        ink.save();
-        ink.fillStyle = "#111411";
-        ink.globalCompositeOperation = "source-over";
-        ink.filter = "none";
-        ink.globalAlpha = 0.96;
-        ink.fill(face);
-        drawYongClippedEdgeNicks(face, p, [
+        const q = (x, y) => p(72 + (x - 72) * 1.18 - 1, -22 + (y + 22) * 1.28 + 4);
+        const body = drawYongOneStrokeBand(
+          q,
+          [
+            { x: 34.5, y: -0.2, left: 5.684, right: 6.416, dirX: 1, dirY: -0.55 },
+            { x: 47.5, y: -10.8, left: 8.002, right: 9.832 },
+            { x: 61.5, y: -24, left: 9.832, right: 12.76 },
+            { x: 76.5, y: -38.5, left: 11.174, right: 14.59 },
+            { x: 91.5, y: -41, left: 9.832, right: 13.248 },
+            { x: 104, y: -30.5, left: 6.66, right: 9.588, dirX: 1, dirY: 0.42 },
+          ],
+          { alpha: 0.96, blur: 0.01 },
+        );
+        if (!body) return;
+        drawYongClippedEdgeNicks(body, q, [
           { start: [54, -5], end: [60, -14], alpha: 0, width: 0.18 },
           { start: [69, -17], end: [75, -26], alpha: 0, width: 0.16 },
           { start: [87, -33], end: [81, -29], alpha: 0, width: 0.14 },
         ]);
-        ink.restore();
       }
 
       function drawYongReferenceTopDotFace(p) {
