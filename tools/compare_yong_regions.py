@@ -58,6 +58,10 @@ def normalize_mask(mask: Image.Image, size: int, padding: int) -> Image.Image:
     return out.point(lambda value: 255 if value > 60 else 0)
 
 
+def crop_aligned_mask(mask: Image.Image, size: int) -> Image.Image:
+    return mask.resize((size, size), Image.Resampling.LANCZOS).point(lambda value: 255 if value > 60 else 0)
+
+
 def mask_stats(mask: Image.Image) -> dict[str, object]:
     pixels = mask.load()
     area = 0
@@ -139,6 +143,7 @@ def main() -> None:
     parser.add_argument("--ref-box", required=True)
     parser.add_argument("--cand-box", required=True)
     parser.add_argument("--label", default="region-compare")
+    parser.add_argument("--align", choices=("bbox", "crop"), default="bbox")
     parser.add_argument("--size", type=int, default=260)
     parser.add_argument("--padding", type=int, default=24)
     parser.add_argument("--out", required=True)
@@ -147,10 +152,14 @@ def main() -> None:
 
     reference = Image.open(args.reference).convert("RGB").crop(parse_box(args.ref_box))
     candidate = Image.open(args.candidate).convert("RGB").crop(parse_box(args.cand_box))
-    ref_mask = normalize_mask(warm_mask(reference), args.size, args.padding)
-    cand_mask = normalize_mask(warm_mask(candidate), args.size, args.padding)
+    if args.align == "crop":
+        ref_mask = crop_aligned_mask(warm_mask(reference), args.size)
+        cand_mask = crop_aligned_mask(warm_mask(candidate), args.size)
+    else:
+        ref_mask = normalize_mask(warm_mask(reference), args.size, args.padding)
+        cand_mask = normalize_mask(warm_mask(candidate), args.size, args.padding)
 
-    metrics = {"global": compare_masks(ref_mask, cand_mask), "regions": {}}
+    metrics = {"align": args.align, "global": compare_masks(ref_mask, cand_mask), "regions": {}}
     for name, box in REGIONS.items():
         metrics["regions"][name] = compare_masks(ref_mask.crop(box), cand_mask.crop(box))
 
