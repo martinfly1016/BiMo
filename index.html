@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.13</h2>
+          <h2>BiMo Contact Patch v10.14</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -5974,51 +5974,29 @@
       }
 
       function drawYongReferencePieFace(p) {
-        ink.save();
-        ink.fillStyle = "#111411";
-        ink.filter = demoInkMode ? "blur(0.04px)" : "none";
-        ink.globalCompositeOperation = "source-over";
-        const unit = Math.abs(p(1, 0).x - p(0, 0).x) || 1;
-        const main = new Path2D();
-        main.moveTo(p(-88, -5).x, p(-88, -5).y);
-        main.lineTo(p(-74, -13.8).x, p(-74, -13.8).y);
-        main.bezierCurveTo(p(-57, -15).x, p(-57, -15).y, p(-27, -13).x, p(-27, -13).y, p(-10, -8.2).x, p(-10, -8.2).y);
-        main.bezierCurveTo(p(-1.5, -5.4).x, p(-1.5, -5.4).y, p(4, -1.8).x, p(4, -1.8).y, p(-2.8, 2.8).x, p(-2.8, 2.8).y);
-        main.bezierCurveTo(p(-14, 7.5).x, p(-14, 7.5).y, p(-28.5, 13).x, p(-28.5, 13).y, p(-44.5, 19.2).x, p(-44.5, 19.2).y);
-        main.bezierCurveTo(p(-42, 24).x, p(-42, 24).y, p(-75, 43.5).x, p(-75, 43.5).y, p(-103, 56).x, p(-103, 56).y);
-        main.bezierCurveTo(p(-92, 40.5).x, p(-92, 40.5).y, p(-66, 25.8).x, p(-66, 25.8).y, p(-37.5, 7.4).x, p(-37.5, 7.4).y);
-        main.bezierCurveTo(p(-55, 4).x, p(-55, 4).y, p(-72, 1.4).x, p(-72, 1.4).y, p(-91, -1.4).x, p(-91, -1.4).y);
-        main.lineTo(p(-88, -5).x, p(-88, -5).y);
-        main.closePath();
-        ink.globalAlpha = 0.94;
-        ink.fill(main);
-
-        ink.save();
-        ink.clip(main);
-        ink.globalCompositeOperation = "destination-out";
-        ink.strokeStyle = "#000";
-        ink.lineCap = "round";
-        ink.lineJoin = "round";
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.72;
-        ink.beginPath();
-        ink.moveTo(p(-35, -24).x, p(-35, -24).y);
-        ink.bezierCurveTo(p(-21, -27).x, p(-21, -27).y, p(-11, -27).x, p(-11, -27).y, p(-6, -25).x, p(-6, -25).y);
-        ink.stroke();
-        ink.globalAlpha = 0;
-        ink.lineWidth = unit * 0.62;
-        ink.beginPath();
-        ink.moveTo(p(-19, -8).x, p(-19, -8).y);
-        ink.bezierCurveTo(p(-26, 7).x, p(-26, 7).y, p(-38, 20).x, p(-38, 20).y, p(-46, 28).x, p(-46, 28).y);
-        ink.stroke();
-        ink.restore();
-        drawYongClippedEdgeNicks(main, p, [
-          { start: [-56, 35], end: [-49, 28], alpha: 0, width: 0.4 },
-          { start: [-38, 18], end: [-32, 11], alpha: 0, width: 0.34 },
-          { start: [-15, -30], end: [-10, -26], alpha: 0, width: 0.3 },
+        const body = drawYongOneStrokeBand(
+          p,
+          [
+            { x: -88, y: -7, left: 2, right: 3.8, dirX: 1, dirY: -0.18 },
+            { x: -76, y: -11.3, left: 3.8, right: 5.8 },
+            { x: -58, y: -11.9, left: 5.8, right: 7.8 },
+            { x: -36, y: -9.7, left: 7, right: 8.8 },
+            { x: -11.4, y: -4.1, left: 6.4, right: 9.6 },
+            { x: -0.8, y: 1.4, left: 5.2, right: 9, dirX: 0.86, dirY: 0.18 },
+            { x: -12.8, y: 8.7, left: 7.6, right: 9.8, dirX: -0.42, dirY: 0.9 },
+            { x: -32.4, y: 17.8, left: 5.4, right: 7.4 },
+            { x: -53.33, y: 31.17, left: 3.6, right: 5.4 },
+            { x: -76.67, y: 45.83, left: 2.2, right: 3.6 },
+            { x: -102, y: 59, left: 0.8, right: 1.7, dirX: -1, dirY: 0.48 },
+          ],
+          { alpha: 0.95, blur: 0.01 },
+        );
+        if (!body) return;
+        drawYongClippedEdgeNicks(body, p, [
+          { start: [-60, 35], end: [-52, 29], alpha: 0, width: 0.26 },
+          { start: [-38, 18], end: [-32, 11], alpha: 0, width: 0.22 },
+          { start: [-15, -30], end: [-10, -26], alpha: 0, width: 0.2 },
         ]);
-        ink.filter = "none";
-        ink.restore();
       }
 
       function drawYongReferenceNaiFace(p) {
