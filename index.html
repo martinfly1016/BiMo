@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.79</h2>
+          <h2>BiMo Contact Patch v9.80</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -656,6 +656,10 @@
       function smoothstep(edge0, edge1, value) {
         const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
         return t * t * (3 - 2 * t);
+      }
+
+      function liveCleanInkMode() {
+        return !demoInkMode && !singleFaceInkMode && !settings.dryCut && settings.roughness < 0.2;
       }
 
       function syncSettings() {
@@ -6869,6 +6873,47 @@
         updateHud();
       }
 
+      function runLiveCleanDemo() {
+        clearInk();
+        brush.sampleCount = 0;
+        controls.size.value = "34";
+        controls.deform.value = "0.9";
+        controls.lag.value = "0.24";
+        controls.density.value = "0.28";
+        controls.roughness.value = "0.04";
+        controls.dryness.value = "0";
+        controls.showPatch.checked = false;
+        controls.dryCut.checked = false;
+        syncSettings();
+        resetModelState();
+        brush.drawing = true;
+        brush.pointerId = "live-clean-demo";
+        const rect = stage.getBoundingClientRect();
+        const x = rect.width * 0.38;
+        const y0 = rect.height * 0.18;
+        const y1 = rect.height * 0.84;
+        const start = performance.now();
+        for (let i = 0; i <= 96; i += 1) {
+          const t = i / 96;
+          processSample({
+            x: x + Math.sin(t * Math.PI * 5) * 1.4,
+            y: lerp(y0, y1, t),
+            t: start + i * 8,
+            pressure: 0.22 + Math.sin(t * Math.PI) * 0.08,
+            tiltX: -18,
+            tiltY: 38,
+            twist: 0,
+            pointerType: "pen",
+          });
+        }
+        brush.drawing = false;
+        brush.pointerId = null;
+        brush.last = null;
+        const canvasRect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, canvasRect.width, canvasRect.height);
+        updateHud();
+      }
+
       function exportPng() {
         const rect = stage.getBoundingClientRect();
         const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
@@ -7433,6 +7478,52 @@
         ctx.restore();
       }
 
+      function drawCleanWetBridge(ctx, from, to, model, alpha, dir, perpX, perpY, fromHalf, toHalf) {
+        const pointed = clamp(model.pointed || 0, 0, 1);
+        const rootLoad = clamp(model.rootLoad || 0, 0, 1);
+        const belly = clamp(model.belly || 0, 0, 1);
+        const inkScale = clamp(model.inkScale ?? 1, 0, 1);
+        const fromCleanHalf = fromHalf * lerp(1, 0.88, pointed) * lerp(1, 1.04, rootLoad);
+        const toCleanHalf = toHalf * lerp(1, 0.86, pointed) * lerp(1, 1.06, rootLoad);
+        const bow = Math.max(fromCleanHalf, toCleanHalf) * lerp(0.008, 0.032, belly) * lerp(1, 0.35, pointed);
+        const cleanAlpha = clamp(Math.max(alpha, 0.86 * inkScale), 0, 1);
+
+        ctx.save();
+        ctx.fillStyle = "#111411";
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = cleanAlpha;
+        ctx.beginPath();
+        ctx.moveTo(from.x + perpX * fromCleanHalf, from.y + perpY * fromCleanHalf);
+        ctx.quadraticCurveTo(
+          (from.x + to.x) * 0.5 + perpX * ((fromCleanHalf + toCleanHalf) * 0.5 + bow),
+          (from.y + to.y) * 0.5 + perpY * ((fromCleanHalf + toCleanHalf) * 0.5 + bow),
+          to.x + perpX * toCleanHalf,
+          to.y + perpY * toCleanHalf,
+        );
+        ctx.lineTo(to.x - perpX * toCleanHalf, to.y - perpY * toCleanHalf);
+        ctx.quadraticCurveTo(
+          (from.x + to.x) * 0.5 - perpX * ((fromCleanHalf + toCleanHalf) * 0.5 + bow),
+          (from.y + to.y) * 0.5 - perpY * ((fromCleanHalf + toCleanHalf) * 0.5 + bow),
+          from.x - perpX * fromCleanHalf,
+          from.y - perpY * fromCleanHalf,
+        );
+        ctx.closePath();
+        ctx.fill();
+
+        if (pointed < 0.72) {
+          ctx.globalAlpha = cleanAlpha;
+          ctx.strokeStyle = "#111411";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.lineWidth = Math.max(0.8, Math.min(fromCleanHalf, toCleanHalf) * lerp(1.36, 1.72, rootLoad));
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
       function drawWetBridge(ctx, from, to, model) {
         if (!from) return;
         to = contactCenter(to.x, to.y, model);
@@ -7468,6 +7559,11 @@
           Math.max(fromHalf, toHalf) *
           (0.04 + clamp(model.belly || 0, 0, 1) * 0.12 + clamp(model.fan || 0, 0, 1) * 0.1 + clamp(model.cornerBias || 0, 0, 1) * 0.08) *
           lerp(1, 0.42, pointed);
+
+        if (liveCleanInkMode()) {
+          drawCleanWetBridge(ctx, from, to, model, alpha, dir, perpX, perpY, fromHalf, toHalf);
+          return;
+        }
 
         ctx.save();
         ctx.fillStyle = "#111411";
@@ -7619,6 +7715,23 @@
         const center = contactCenter(x, y, model);
         const perpX = -dirY;
         const perpY = dirX;
+
+        if (liveCleanInkMode()) {
+          const cleanModel = {
+            ...model,
+            wedge: Math.min(model.wedge || 0, 0.12),
+            fan: Math.min(model.fan || 0, 0.08),
+            belly: Math.min(model.belly || 0, 0.18),
+            bendAmount: Math.min(model.bendAmount || 0, 0.18),
+          };
+          ctx.save();
+          ctx.fillStyle = "#111411";
+          ctx.globalCompositeOperation = "source-over";
+          ctx.globalAlpha = clamp(Math.max(alpha, 0.82 * inkScale), 0, 1);
+          ctx.fill(contactPath(center.x, center.y, cleanModel, lerp(0.96, 0.86, pointed)));
+          ctx.restore();
+          return;
+        }
 
         ctx.save();
         ctx.fillStyle = "#111411";
@@ -7788,11 +7901,12 @@
             brush.stampTravel >= Math.max(2.8, footprintGap * lerp(0.72, 0.32, brush.stampBias));
           const pausedForContact = stationaryContact && brush.stampTravel >= footprintGap;
           const needsFootprint =
-            pressureBloom ||
-            stampFootprint ||
-            (pausedForContact &&
-              brush.capBias < 0.55 &&
-              ((settings.roughness > 0.1 && brush.turnHold > 0.78) || brush.pressure < 0.06 || brush.rootLoad > 0.46));
+            !liveCleanInkMode() &&
+            (pressureBloom ||
+              stampFootprint ||
+              (pausedForContact &&
+                brush.capBias < 0.55 &&
+                ((settings.roughness > 0.1 && brush.turnHold > 0.78) || brush.pressure < 0.06 || brush.rootLoad > 0.46)));
           if (needsFootprint) {
             drawFootprint(ink, point.x, point.y, brush);
             brush.stampTravel = 0;
@@ -7922,7 +8036,7 @@
       window.addEventListener("resize", resizeCanvases);
       window.addEventListener("orientationchange", () => window.setTimeout(resizeCanvases, 180));
 
-      window.BiMoDebug = { simulate: simulateModel, runYongDemo, runDragDemo, runNaiStudyDemo };
+      window.BiMoDebug = { simulate: simulateModel, runYongDemo, runDragDemo, runNaiStudyDemo, runLiveCleanDemo };
 
       syncSettings();
       resizeCanvases();
@@ -7934,6 +8048,8 @@
         requestAnimationFrame(() => runDragDemo());
       } else if (demoParam === "nai-study") {
         requestAnimationFrame(() => runNaiStudyDemo());
+      } else if (demoParam === "live-clean") {
+        requestAnimationFrame(() => runLiveCleanDemo());
       }
     </script>
   </body>
