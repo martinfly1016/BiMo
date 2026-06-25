@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.68</h2>
+          <h2>BiMo Contact Patch v9.69</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -5965,15 +5965,15 @@
         ink.globalCompositeOperation = "source-over";
         const unit = Math.abs(p(1, 0).x - p(0, 0).x) || 1;
         const main = new Path2D();
-        main.moveTo(p(-87, -4.6).x, p(-87, -4.6).y);
-        main.lineTo(p(-73, -14.3).x, p(-73, -14.3).y);
-        main.bezierCurveTo(p(-56, -15.2).x, p(-56, -15.2).y, p(-27, -13.2).x, p(-27, -13.2).y, p(-11.5, -8.8).x, p(-11.5, -8.8).y);
-        main.bezierCurveTo(p(-3.8, -6.2).x, p(-3.8, -6.2).y, p(1.2, -2.4).x, p(1.2, -2.4).y, p(-4.5, 2.2).x, p(-4.5, 2.2).y);
-        main.bezierCurveTo(p(-15.5, 6.8).x, p(-15.5, 6.8).y, p(-29, 12.4).x, p(-29, 12.4).y, p(-43.5, 19).x, p(-43.5, 19).y);
-        main.bezierCurveTo(p(-42, 25).x, p(-42, 25).y, p(-74, 43).x, p(-74, 43).y, p(-102, 56).x, p(-102, 56).y);
-        main.bezierCurveTo(p(-91, 41).x, p(-91, 41).y, p(-66, 27).x, p(-66, 27).y, p(-38, 9).x, p(-38, 9).y);
-        main.bezierCurveTo(p(-55, 6).x, p(-55, 6).y, p(-71, 3.2).x, p(-71, 3.2).y, p(-90, 0.5).x, p(-90, 0.5).y);
-        main.lineTo(p(-87, -4.6).x, p(-87, -4.6).y);
+        main.moveTo(p(-88, -5).x, p(-88, -5).y);
+        main.lineTo(p(-74, -13.8).x, p(-74, -13.8).y);
+        main.bezierCurveTo(p(-57, -15).x, p(-57, -15).y, p(-27, -13).x, p(-27, -13).y, p(-10, -8.2).x, p(-10, -8.2).y);
+        main.bezierCurveTo(p(-1.5, -5.4).x, p(-1.5, -5.4).y, p(4, -1.8).x, p(4, -1.8).y, p(-2.8, 2.8).x, p(-2.8, 2.8).y);
+        main.bezierCurveTo(p(-14, 7.5).x, p(-14, 7.5).y, p(-28.5, 13).x, p(-28.5, 13).y, p(-44.5, 19.2).x, p(-44.5, 19.2).y);
+        main.bezierCurveTo(p(-42, 24).x, p(-42, 24).y, p(-75, 43.5).x, p(-75, 43.5).y, p(-103, 56).x, p(-103, 56).y);
+        main.bezierCurveTo(p(-92, 40.5).x, p(-92, 40.5).y, p(-66, 26.2).x, p(-66, 26.2).y, p(-37.5, 8.6).x, p(-37.5, 8.6).y);
+        main.bezierCurveTo(p(-55, 5.2).x, p(-55, 5.2).y, p(-72, 2.4).x, p(-72, 2.4).y, p(-91, -0.4).x, p(-91, -0.4).y);
+        main.lineTo(p(-88, -5).x, p(-88, -5).y);
         main.closePath();
         ink.globalAlpha = 0.94;
         ink.fill(main);
