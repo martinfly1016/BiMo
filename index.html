@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.89</h2>
+          <h2>BiMo Contact Patch v9.91</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6392,15 +6392,16 @@
         face.bezierCurveTo(p(5, -66).x, p(5, -66).y, p(6, -71).x, p(6, -71).y, p(8, -73).x, p(8, -73).y);
         face.closePath();
 
+        const top = (x, y) => p(23 + (x - 23) * 1.22 + 12, -70 + (y + 70) * 1.12 - 3);
         const topMass = new Path2D();
-        topMass.moveTo(p(10.2, -83.8).x, p(10.2, -83.8).y);
-        topMass.bezierCurveTo(p(21.5, -84.2).x, p(21.5, -84.2).y, p(34, -79.8).x, p(34, -79.8).y, p(43.5, -73.8).x, p(43.5, -73.8).y);
-        topMass.lineTo(p(44.4, -69.7).x, p(44.4, -69.7).y);
-        topMass.lineTo(p(39, -62.2).x, p(39, -62.2).y);
-        topMass.bezierCurveTo(p(31.5, -58.8).x, p(31.5, -58.8).y, p(22, -60.5).x, p(22, -60.5).y, p(15.8, -65.8).x, p(15.8, -65.8).y);
-        topMass.lineTo(p(12.8, -67.8).x, p(12.8, -67.8).y);
-        topMass.bezierCurveTo(p(9.8, -65.2).x, p(9.8, -65.2).y, p(6.6, -61.8).x, p(6.6, -61.8).y, p(3.8, -60.2).x, p(3.8, -60.2).y);
-        topMass.bezierCurveTo(p(8.4, -67).x, p(8.4, -67).y, p(8.4, -80.5).x, p(8.4, -80.5).y, p(10.2, -83.8).x, p(10.2, -83.8).y);
+        topMass.moveTo(top(10.2, -83.8).x, top(10.2, -83.8).y);
+        topMass.bezierCurveTo(top(21.5, -84.2).x, top(21.5, -84.2).y, top(34, -79.8).x, top(34, -79.8).y, top(43.5, -73.8).x, top(43.5, -73.8).y);
+        topMass.lineTo(top(44.4, -69.7).x, top(44.4, -69.7).y);
+        topMass.lineTo(top(39, -62.2).x, top(39, -62.2).y);
+        topMass.bezierCurveTo(top(31.5, -58.8).x, top(31.5, -58.8).y, top(22, -60.5).x, top(22, -60.5).y, top(15.8, -65.8).x, top(15.8, -65.8).y);
+        topMass.lineTo(top(12.8, -67.8).x, top(12.8, -67.8).y);
+        topMass.bezierCurveTo(top(9.8, -65.2).x, top(9.8, -65.2).y, top(6.6, -61.8).x, top(6.6, -61.8).y, top(3.8, -60.2).x, top(3.8, -60.2).y);
+        topMass.bezierCurveTo(top(8.4, -67).x, top(8.4, -67).y, top(8.4, -80.5).x, top(8.4, -80.5).y, top(10.2, -83.8).x, top(10.2, -83.8).y);
         topMass.closePath();
 
         const lowerCut = new Path2D();
