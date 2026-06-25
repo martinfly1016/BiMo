@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.86</h2>
+          <h2>BiMo Contact Patch v9.88</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -659,12 +659,13 @@
         return t * t * (3 - 2 * t);
       }
 
-      function liveCleanInkMode() {
-        return !demoInkMode && !singleFaceInkMode && !settings.dryCut && settings.roughness < 0.2;
+      function liveCleanInkMode(modelOrSample = null) {
+        const isPen = modelOrSample?.pointerType === "pen" || brush.pointerType === "pen";
+        return !demoInkMode && !singleFaceInkMode && !settings.dryCut && (isPen || settings.roughness < 0.2);
       }
 
       function livePenInkMode(modelOrSample = null) {
-        return liveCleanInkMode() && (modelOrSample?.pointerType === "pen" || brush.pointerType === "pen");
+        return liveCleanInkMode(modelOrSample) && (modelOrSample?.pointerType === "pen" || brush.pointerType === "pen");
       }
 
       function syncSettings() {
@@ -683,7 +684,9 @@
           "tiltInfluence",
           "mousePressure",
         ]) {
-          settings[key] = Number(controls[key].value);
+          const parsed = Number(controls[key].value);
+          settings[key] = Number.isFinite(parsed) ? parsed : settings[key];
+          if (!Number.isFinite(parsed)) controls[key].value = String(settings[key]);
           const decimals = key === "size" || key === "tiltRotation" ? 0 : 2;
           outputs[key].textContent = settings[key].toFixed(decimals);
         }
@@ -6299,8 +6302,8 @@
 
       function drawYongReferenceHengShuGouFace(p) {
         const face = new Path2D();
-        face.moveTo(p(-39, -45).x, p(-39, -45).y);
-        face.bezierCurveTo(p(-23.5, -51.5).x, p(-23.5, -51.5).y, p(6.5, -52.5).x, p(6.5, -52.5).y, p(35, -46).x, p(35, -46).y);
+        face.moveTo(p(-33, -44).x, p(-33, -44).y);
+        face.bezierCurveTo(p(-19, -51).x, p(-19, -51).y, p(7, -52.5).x, p(7, -52.5).y, p(35, -46).x, p(35, -46).y);
         face.bezierCurveTo(p(41, -44).x, p(41, -44).y, p(42, -40.5).x, p(42, -40.5).y, p(38, -36.5).x, p(38, -36.5).y);
         face.bezierCurveTo(p(34, -33.5).x, p(34, -33.5).y, p(28.5, -31.5).x, p(28.5, -31.5).y, p(23.5, -31.5).x, p(23.5, -31.5).y);
         face.bezierCurveTo(p(29, -8).x, p(29, -8).y, p(28, 24).x, p(28, 24).y, p(25.5, 52).x, p(25.5, 52).y);
@@ -6310,7 +6313,7 @@
         face.bezierCurveTo(p(-7, 60).x, p(-7, 60).y, p(4, 66).x, p(4, 66).y, p(14, 72).x, p(14, 72).y);
         face.bezierCurveTo(p(12.5, 58).x, p(12.5, 58).y, p(9, 43).x, p(9, 43).y, p(8, 32).x, p(8, 32).y);
         face.bezierCurveTo(p(7, 7).x, p(7, 7).y, p(7, -18).x, p(7, -18).y, p(6, -40).x, p(6, -40).y);
-        face.bezierCurveTo(p(-7, -40).x, p(-7, -40).y, p(-25, -42).x, p(-25, -42).y, p(-39, -45).x, p(-39, -45).y);
+        face.bezierCurveTo(p(-6, -40).x, p(-6, -40).y, p(-20, -41.5).x, p(-20, -41.5).y, p(-33, -44).x, p(-33, -44).y);
         face.closePath();
 
         ink.save();
@@ -6329,8 +6332,8 @@
         ink.globalAlpha = 0;
         ink.lineWidth = unit * 0.72;
         ink.beginPath();
-        ink.moveTo(p(-25, -48).x, p(-25, -48).y);
-        ink.bezierCurveTo(p(-7, -51).x, p(-7, -51).y, p(12, -50).x, p(12, -50).y, p(29, -45).x, p(29, -45).y);
+        ink.moveTo(p(-18, -48).x, p(-18, -48).y);
+        ink.bezierCurveTo(p(-4, -51).x, p(-4, -51).y, p(13, -50).x, p(13, -50).y, p(29, -45).x, p(29, -45).y);
         ink.stroke();
         ink.globalAlpha = 0;
         ink.lineWidth = unit * 0.24;
@@ -6944,10 +6947,11 @@
         };
       }
 
-      function extractSample(event) {
+      function extractSample(event, fallbackPointerType = null) {
         const point = getLocalPoint(event);
         let pressure = finite(event.pressure, 0);
-        const isPen = event.pointerType === "pen";
+        const pointerType = event.pointerType || fallbackPointerType || brush.pointerType || "unknown";
+        const isPen = pointerType === "pen";
         if (!isPen) pressure = settings.mousePressure;
         if (brush.drawing && pressure <= 0) pressure = isPen ? 0.03 : settings.mousePressure;
 
@@ -6976,7 +6980,7 @@
           tiltX,
           tiltY,
           twist: finite(event.twist, 0),
-          pointerType: event.pointerType || "unknown",
+          pointerType,
         };
       }
 
@@ -7496,8 +7500,8 @@
         ctx.save();
         ctx.fillStyle = "#111411";
         ctx.globalCompositeOperation = "source-over";
-        ctx.globalAlpha = cleanAlpha;
         if (livePenInkMode(model)) {
+          ctx.globalAlpha = 1;
           ctx.strokeStyle = "#111411";
           ctx.lineCap = "round";
           ctx.lineJoin = "round";
@@ -7509,6 +7513,7 @@
           ctx.restore();
           return;
         }
+        ctx.globalAlpha = cleanAlpha;
         ctx.beginPath();
         ctx.moveTo(from.x + perpX * fromCleanHalf, from.y + perpY * fromCleanHalf);
         ctx.quadraticCurveTo(
@@ -7577,7 +7582,7 @@
           (0.04 + clamp(model.belly || 0, 0, 1) * 0.12 + clamp(model.fan || 0, 0, 1) * 0.1 + clamp(model.cornerBias || 0, 0, 1) * 0.08) *
           lerp(1, 0.42, pointed);
 
-        if (liveCleanInkMode()) {
+        if (liveCleanInkMode(model)) {
           drawCleanWetBridge(ctx, from, to, model, alpha, dir, perpX, perpY, fromHalf, toHalf);
           return;
         }
@@ -7733,7 +7738,7 @@
         const perpX = -dirY;
         const perpY = dirX;
 
-        if (liveCleanInkMode()) {
+        if (liveCleanInkMode(model)) {
           const cleanModel = {
             ...model,
             wedge: Math.min(model.wedge || 0, 0.12),
@@ -7744,7 +7749,7 @@
           ctx.save();
           ctx.fillStyle = "#111411";
           ctx.globalCompositeOperation = "source-over";
-          ctx.globalAlpha = clamp(Math.max(alpha, 0.82 * inkScale), 0, 1);
+          ctx.globalAlpha = livePenInkMode(model) ? 1 : clamp(Math.max(alpha, 0.82 * inkScale), 0, 1);
           ctx.fill(contactPath(center.x, center.y, cleanModel, lerp(0.96, 0.86, pointed)));
           ctx.restore();
           return;
@@ -7850,7 +7855,7 @@
       }
 
       function smoothLivePenSample(sample) {
-        if (sample.pointerType !== "pen" || !liveCleanInkMode()) return sample;
+        if (sample.pointerType !== "pen" || !liveCleanInkMode(sample)) return sample;
         if (!brush.filteredSample) {
           brush.filteredSample = { ...sample };
           return sample;
@@ -8048,7 +8053,7 @@
           typeof event.getCoalescedEvents === "function" && event.getCoalescedEvents().length
             ? event.getCoalescedEvents()
             : [event];
-        for (const coalesced of events) processSample(extractSample(coalesced));
+        for (const coalesced of events) processSample(extractSample(coalesced, event.pointerType));
       }
 
       function finishStroke(event) {
