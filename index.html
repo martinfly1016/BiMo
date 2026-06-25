@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.84</h2>
+          <h2>BiMo Contact Patch v9.85</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -601,6 +601,7 @@
         drawing: false,
         pointerId: null,
         last: null,
+        filteredSample: null,
         inkPoint: null,
         sampleCount: 0,
         dirX: 0,
@@ -660,6 +661,10 @@
 
       function liveCleanInkMode() {
         return !demoInkMode && !singleFaceInkMode && !settings.dryCut && settings.roughness < 0.2;
+      }
+
+      function livePenInkMode(modelOrSample = null) {
+        return liveCleanInkMode() && (modelOrSample?.pointerType === "pen" || brush.pointerType === "pen");
       }
 
       function syncSettings() {
@@ -7492,6 +7497,18 @@
         ctx.fillStyle = "#111411";
         ctx.globalCompositeOperation = "source-over";
         ctx.globalAlpha = cleanAlpha;
+        if (livePenInkMode(model)) {
+          ctx.strokeStyle = "#111411";
+          ctx.lineCap = "round";
+          ctx.lineJoin = "round";
+          ctx.lineWidth = Math.max(1.2, (fromCleanHalf + toCleanHalf) * lerp(0.9, 0.98, rootLoad));
+          ctx.beginPath();
+          ctx.moveTo(from.x, from.y);
+          ctx.lineTo(to.x, to.y);
+          ctx.stroke();
+          ctx.restore();
+          return;
+        }
         ctx.beginPath();
         ctx.moveTo(from.x + perpX * fromCleanHalf, from.y + perpY * fromCleanHalf);
         ctx.quadraticCurveTo(
@@ -7832,7 +7849,32 @@
         outputs.logSamples.textContent = brush.sampleCount.toString();
       }
 
+      function smoothLivePenSample(sample) {
+        if (sample.pointerType !== "pen" || !liveCleanInkMode()) return sample;
+        if (!brush.filteredSample) {
+          brush.filteredSample = { ...sample };
+          return sample;
+        }
+
+        const prev = brush.filteredSample;
+        const distance = hypot(sample.x - prev.x, sample.y - prev.y);
+        const positionResponse = clamp(distance / 7.5, 0.16, 0.74);
+        const pressureResponse = distance > 1.2 ? 0.32 : 0.18;
+        const tiltResponse = 0.08;
+        const smoothed = {
+          ...sample,
+          x: lerp(prev.x, sample.x, positionResponse),
+          y: lerp(prev.y, sample.y, positionResponse),
+          pressure: lerp(prev.pressure, sample.pressure, pressureResponse),
+          tiltX: lerp(prev.tiltX, sample.tiltX, tiltResponse),
+          tiltY: lerp(prev.tiltY, sample.tiltY, tiltResponse),
+        };
+        brush.filteredSample = smoothed;
+        return smoothed;
+      }
+
       function processSample(sample) {
+        sample = smoothLivePenSample(sample);
         if (!brush.last) {
           brush.last = sample;
           const target = targetShape(sample, null);
@@ -7926,6 +7968,7 @@
 
       function resetModelState() {
         brush.last = null;
+        brush.filteredSample = null;
         brush.inkPoint = null;
         brush.dirX = 0;
         brush.dirY = -1;
