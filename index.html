@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.69</h2>
+          <h2>BiMo Contact Patch v9.70</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -640,13 +640,16 @@
       let demoInkMode = false;
       let singleFaceInkMode = false;
 
-      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+      const finite = (value, fallback = 0) => (Number.isFinite(value) ? value : fallback);
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, finite(value, min)));
       const lerp = (a, b, t) => a + (b - a) * t;
       const hypot = Math.hypot;
 
       function normalize(x, y, fallbackX = 0, fallbackY = -1) {
+        x = finite(x, fallbackX);
+        y = finite(y, fallbackY);
         const length = hypot(x, y);
-        if (length < 0.0001) return { x: fallbackX, y: fallbackY };
+        if (!Number.isFinite(length) || length < 0.0001) return { x: fallbackX, y: fallbackY };
         return { x: x / length, y: y / length };
       }
 
@@ -6886,14 +6889,14 @@
       function getLocalPoint(event) {
         const rect = overlayCanvas.getBoundingClientRect();
         return {
-          x: event.clientX - rect.left,
-          y: event.clientY - rect.top,
+          x: finite(event.clientX, rect.left) - rect.left,
+          y: finite(event.clientY, rect.top) - rect.top,
         };
       }
 
       function extractSample(event) {
         const point = getLocalPoint(event);
-        let pressure = typeof event.pressure === "number" ? event.pressure : 0;
+        let pressure = finite(event.pressure, 0);
         const isPen = event.pointerType === "pen";
         if (!isPen) pressure = settings.mousePressure;
         if (brush.drawing && pressure <= 0) pressure = isPen ? 0.03 : settings.mousePressure;
@@ -6906,8 +6909,8 @@
           typeof event.azimuthAngle === "number" && Number.isFinite(event.azimuthAngle)
             ? event.azimuthAngle
             : null;
-        let tiltX = typeof event.tiltX === "number" ? event.tiltX : 0;
-        let tiltY = typeof event.tiltY === "number" ? event.tiltY : 0;
+        let tiltX = finite(event.tiltX, 0);
+        let tiltY = finite(event.tiltY, 0);
 
         if (altitude !== null && azimuth !== null) {
           const tiltAmount = clamp(1 - altitude / (Math.PI / 2), 0, 1);
@@ -6918,11 +6921,11 @@
         return {
           x: point.x,
           y: point.y,
-          t: event.timeStamp || performance.now(),
+          t: finite(event.timeStamp, performance.now()),
           pressure: clamp(pressure, 0, 1),
           tiltX,
           tiltY,
-          twist: typeof event.twist === "number" ? event.twist : 0,
+          twist: finite(event.twist, 0),
           pointerType: event.pointerType || "unknown",
         };
       }
@@ -7010,7 +7013,10 @@
           tipDirection.y,
         );
         const axisBias = clamp(sample.axisBias || 0, 0, 1);
-        const axis = sample.axisX !== null && sample.axisY !== null ? normalize(sample.axisX, sample.axisY, bristleTip.x, bristleTip.y) : bristleTip;
+        const axis =
+          Number.isFinite(sample.axisX) && Number.isFinite(sample.axisY)
+            ? normalize(sample.axisX, sample.axisY, bristleTip.x, bristleTip.y)
+            : bristleTip;
         const direction = normalize(
           brush.dirX * memoryWeight + bristleTip.x * dragWeight * (1 - axisBias) + axis.x * dragWeight * axisBias + tilt.x * tiltWeight,
           brush.dirY * memoryWeight + bristleTip.y * dragWeight * (1 - axisBias) + axis.y * dragWeight * axisBias + tilt.y * tiltWeight,
