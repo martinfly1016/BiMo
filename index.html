@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.10</h2>
+          <h2>BiMo Contact Patch v10.11</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6456,59 +6456,23 @@
       }
 
       function drawYongReferenceTopDotFace(p) {
-        const face = new Path2D();
-        face.moveTo(p(8, -73).x, p(8, -73).y);
-        face.bezierCurveTo(p(18, -78).x, p(18, -78).y, p(30, -73).x, p(30, -73).y, p(37, -66).x, p(37, -66).y);
-        face.lineTo(p(31, -62).x, p(31, -62).y);
-        face.bezierCurveTo(p(23, -61).x, p(23, -61).y, p(17, -63).x, p(17, -63).y, p(12, -66).x, p(12, -66).y);
-        face.lineTo(p(2, -58).x, p(2, -58).y);
-        face.bezierCurveTo(p(5, -66).x, p(5, -66).y, p(6, -71).x, p(6, -71).y, p(8, -73).x, p(8, -73).y);
-        face.closePath();
-
-        const top = (x, y) => p(23 + (x - 23) * 1.26 + 22, -70 + (y + 70) * 1.15 - 3);
-        const topMass = new Path2D();
-        topMass.moveTo(top(10.2, -83.8).x, top(10.2, -83.8).y);
-        topMass.bezierCurveTo(top(21.5, -84.2).x, top(21.5, -84.2).y, top(34, -79.8).x, top(34, -79.8).y, top(43.5, -73.8).x, top(43.5, -73.8).y);
-        topMass.lineTo(top(44.4, -69.7).x, top(44.4, -69.7).y);
-        topMass.lineTo(top(39, -62.2).x, top(39, -62.2).y);
-        topMass.bezierCurveTo(top(31.5, -58.8).x, top(31.5, -58.8).y, top(22, -60.5).x, top(22, -60.5).y, top(15.8, -65.8).x, top(15.8, -65.8).y);
-        topMass.lineTo(top(12.8, -67.8).x, top(12.8, -67.8).y);
-        topMass.bezierCurveTo(top(9.8, -65.2).x, top(9.8, -65.2).y, top(6.6, -61.8).x, top(6.6, -61.8).y, top(3.8, -60.2).x, top(3.8, -60.2).y);
-        topMass.bezierCurveTo(top(8.4, -67).x, top(8.4, -67).y, top(8.4, -80.5).x, top(8.4, -80.5).y, top(10.2, -83.8).x, top(10.2, -83.8).y);
-        topMass.closePath();
-
-        const lowerCut = new Path2D();
-        lowerCut.moveTo(p(13, -65).x, p(13, -65).y);
-        lowerCut.bezierCurveTo(p(22, -63).x, p(22, -63).y, p(29, -64).x, p(29, -64).y, p(35, -67).x, p(35, -67).y);
-
-        ink.save();
-        ink.filter = demoInkMode ? "blur(0.06px)" : "none";
-        ink.globalCompositeOperation = "destination-out";
-        ink.globalAlpha = 0;
-        ink.lineWidth = Math.abs(p(1, 0).x - p(0, 0).x) * 2.2;
-        ink.lineCap = "round";
-        ink.stroke(lowerCut);
-        ink.globalCompositeOperation = "source-over";
-        ink.fillStyle = "#111411";
-        ink.globalAlpha = 0;
-        ink.fill(face);
-        ink.globalAlpha = 0.94;
-        ink.fill(topMass);
-        const notch = new Path2D();
-        notch.moveTo(p(6, -63).x, p(6, -63).y);
-        notch.lineTo(p(15, -69).x, p(15, -69).y);
-        notch.lineTo(p(11, -61).x, p(11, -61).y);
-        notch.closePath();
-        ink.globalCompositeOperation = "destination-out";
-        ink.globalAlpha = 0;
-        ink.fill(notch);
-        drawYongClippedEdgeNicks(topMass, p, [
-          { start: [-15, -55], end: [-8, -61], alpha: 0, width: 0.28 },
+        const top = (x, y) => p(23 + (x - 23) * 1.18 + 24, -70 + (y + 70) * 1.05 - 5);
+        const body = drawYongOneStrokeBand(
+          top,
+          [
+            { x: 8.8, y: -82.8, left: 2.816, right: 4.096, dirX: 1, dirY: 0.18 },
+            { x: 18.5, y: -80.5, left: 6.144, right: 8.192 },
+            { x: 31.5, y: -75.4, left: 8.32, right: 10.624 },
+            { x: 42, y: -69.4, left: 6.912, right: 9.216 },
+            { x: 28, y: -64, left: 3.84, right: 6.144, dirX: -0.8, dirY: 0.45 },
+          ],
+          { alpha: 0.94, blur: 0.01 },
+        );
+        if (!body) return;
+        drawYongClippedEdgeNicks(body, top, [
           { start: [7, -77], end: [14, -72], alpha: 0, width: 0.24 },
-          { start: [39, -57], end: [32, -59], alpha: 0, width: 0.26 },
+          { start: [39, -57], end: [32, -59], alpha: 0, width: 0.2 },
         ]);
-        ink.filter = "none";
-        ink.restore();
       }
 
       function runYongDemo() {
