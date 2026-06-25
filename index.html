@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.48</h2>
+          <h2>BiMo Contact Patch v9.52</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -5965,15 +5965,15 @@
         ink.globalCompositeOperation = "source-over";
         const unit = Math.abs(p(1, 0).x - p(0, 0).x) || 1;
         const main = new Path2D();
-        main.moveTo(p(-86, -4).x, p(-86, -4).y);
-        main.lineTo(p(-72, -13.4).x, p(-72, -13.4).y);
-        main.bezierCurveTo(p(-57, -13.5).x, p(-57, -13.5).y, p(-28, -11.7).x, p(-28, -11.7).y, p(-9.5, -6.9).x, p(-9.5, -6.9).y);
-        main.bezierCurveTo(p(-5, -5.7).x, p(-5, -5.7).y, p(0, -4).x, p(0, -4).y, p(-5, 0).x, p(-5, 0).y);
-        main.bezierCurveTo(p(-13.5, 4.2).x, p(-13.5, 4.2).y, p(-26, 10).x, p(-26, 10).y, p(-40.5, 17.5).x, p(-40.5, 17.5).y);
-        main.bezierCurveTo(p(-38, 24).x, p(-38, 24).y, p(-74, 43).x, p(-74, 43).y, p(-102, 56).x, p(-102, 56).y);
-        main.bezierCurveTo(p(-91, 41).x, p(-91, 41).y, p(-67, 28).x, p(-67, 28).y, p(-40, 10).x, p(-40, 10).y);
-        main.bezierCurveTo(p(-54, 6).x, p(-54, 6).y, p(-70, 3.5).x, p(-70, 3.5).y, p(-86, 1).x, p(-86, 1).y);
-        main.lineTo(p(-86, -4).x, p(-86, -4).y);
+        main.moveTo(p(-87, -5).x, p(-87, -5).y);
+        main.lineTo(p(-73, -15.8).x, p(-73, -15.8).y);
+        main.bezierCurveTo(p(-56, -16.5).x, p(-56, -16.5).y, p(-27, -14.4).x, p(-27, -14.4).y, p(-11.5, -9.4).x, p(-11.5, -9.4).y);
+        main.bezierCurveTo(p(-3.5, -6.8).x, p(-3.5, -6.8).y, p(1.5, -2.4).x, p(1.5, -2.4).y, p(-4.5, 2.2).x, p(-4.5, 2.2).y);
+        main.bezierCurveTo(p(-15.5, 6.8).x, p(-15.5, 6.8).y, p(-29, 12.4).x, p(-29, 12.4).y, p(-43.5, 19).x, p(-43.5, 19).y);
+        main.bezierCurveTo(p(-42, 25).x, p(-42, 25).y, p(-74, 43).x, p(-74, 43).y, p(-102, 56).x, p(-102, 56).y);
+        main.bezierCurveTo(p(-91, 41).x, p(-91, 41).y, p(-66, 27).x, p(-66, 27).y, p(-38, 9).x, p(-38, 9).y);
+        main.bezierCurveTo(p(-55, 6).x, p(-55, 6).y, p(-71, 3.2).x, p(-71, 3.2).y, p(-90, 0.5).x, p(-90, 0.5).y);
+        main.lineTo(p(-87, -5).x, p(-87, -5).y);
         main.closePath();
         ink.globalAlpha = 0.94;
         ink.fill(main);
@@ -6018,13 +6018,12 @@
         ink.globalCompositeOperation = "source-over";
         const main = new Path2D();
         main.moveTo(p(21, -8).x, p(21, -8).y);
-        main.bezierCurveTo(p(38, 7).x, p(38, 7).y, p(76, 27).x, p(76, 27).y, p(126, 38).x, p(126, 38).y);
-        main.bezierCurveTo(p(148, 47).x, p(148, 47).y, p(164, 49).x, p(164, 49).y, p(167, 46).x, p(167, 46).y);
-        main.bezierCurveTo(p(181, 45.5).x, p(181, 45.5).y, p(195, 48).x, p(195, 48).y, p(203, 51).x, p(203, 51).y);
-        main.lineTo(p(201, 55).x, p(201, 55).y);
-        main.bezierCurveTo(p(187, 56.5).x, p(187, 56.5).y, p(166, 57).x, p(166, 57).y, p(154, 55.5).x, p(154, 55.5).y);
-        main.bezierCurveTo(p(154, 58.5).x, p(154, 58.5).y, p(142, 58).x, p(142, 58).y, p(122, 55).x, p(122, 55).y);
-        main.bezierCurveTo(p(102, 52.5).x, p(102, 52.5).y, p(83, 48).x, p(83, 48).y, p(63, 46).x, p(63, 46).y);
+        main.bezierCurveTo(p(38, 7).x, p(38, 7).y, p(76, 27).x, p(76, 27).y, p(124, 38).x, p(124, 38).y);
+        main.bezierCurveTo(p(146, 46).x, p(146, 46).y, p(164, 50).x, p(164, 50).y, p(176, 50).x, p(176, 50).y);
+        main.bezierCurveTo(p(188, 50).x, p(188, 50).y, p(199, 51.5).x, p(199, 51.5).y, p(204, 53).x, p(204, 53).y);
+        main.lineTo(p(199, 56).x, p(199, 56).y);
+        main.bezierCurveTo(p(181, 57).x, p(181, 57).y, p(160, 56).x, p(160, 56).y, p(142, 53.5).x, p(142, 53.5).y);
+        main.bezierCurveTo(p(118, 51).x, p(118, 51).y, p(88, 48.2).x, p(88, 48.2).y, p(63, 46).x, p(63, 46).y);
         main.bezierCurveTo(p(43, 37).x, p(43, 37).y, p(31, 23).x, p(31, 23).y, p(24, 9).x, p(24, 9).y);
         main.bezierCurveTo(p(21, 2).x, p(21, 2).y, p(19, -5).x, p(19, -5).y, p(21, -8).x, p(21, -8).y);
         main.closePath();
@@ -6293,12 +6292,11 @@
         face.bezierCurveTo(p(42, -44).x, p(42, -44).y, p(43, -40).x, p(43, -40).y, p(39, -36).x, p(39, -36).y);
         face.bezierCurveTo(p(35, -33).x, p(35, -33).y, p(29, -31).x, p(29, -31).y, p(24, -31).x, p(24, -31).y);
         face.bezierCurveTo(p(29, -8).x, p(29, -8).y, p(28, 23).x, p(28, 23).y, p(24, 49).x, p(24, 49).y);
-        face.bezierCurveTo(p(23, 59).x, p(23, 59).y, p(16, 69).x, p(16, 69).y, p(5, 76).x, p(5, 76).y);
-        face.lineTo(p(-3, 79).x, p(-3, 79).y);
-        face.bezierCurveTo(p(-10, 77).x, p(-10, 77).y, p(-16, 70).x, p(-16, 70).y, p(-19, 63).x, p(-19, 63).y);
-        face.bezierCurveTo(p(-23, 58).x, p(-23, 58).y, p(-27, 55).x, p(-27, 55).y, p(-29, 53).x, p(-29, 53).y);
-        face.bezierCurveTo(p(-17, 55).x, p(-17, 55).y, p(-1, 61).x, p(-1, 61).y, p(10, 68).x, p(10, 68).y);
-        face.bezierCurveTo(p(10, 56).x, p(10, 56).y, p(9, 43).x, p(9, 43).y, p(8, 32).x, p(8, 32).y);
+        face.bezierCurveTo(p(23, 59).x, p(23, 59).y, p(17, 68).x, p(17, 68).y, p(7, 76).x, p(7, 76).y);
+        face.bezierCurveTo(p(2, 80).x, p(2, 80).y, p(-3, 79).x, p(-3, 79).y, p(-7, 75).x, p(-7, 75).y);
+        face.bezierCurveTo(p(-12, 69).x, p(-12, 69).y, p(-17, 63).x, p(-17, 63).y, p(-24, 56).x, p(-24, 56).y);
+        face.bezierCurveTo(p(-12, 58).x, p(-12, 58).y, p(1, 64).x, p(1, 64).y, p(12, 70).x, p(12, 70).y);
+        face.bezierCurveTo(p(11, 57).x, p(11, 57).y, p(9, 43).x, p(9, 43).y, p(8, 32).x, p(8, 32).y);
         face.bezierCurveTo(p(7, 7).x, p(7, 7).y, p(7, -18).x, p(7, -18).y, p(6, -40).x, p(6, -40).y);
         face.bezierCurveTo(p(-7, -40).x, p(-7, -40).y, p(-25, -42).x, p(-25, -42).y, p(-39, -45).x, p(-39, -45).y);
         face.closePath();
