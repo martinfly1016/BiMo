@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.04</h2>
+          <h2>BiMo Contact Patch v10.05</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6300,6 +6300,82 @@
         ink.restore();
       }
 
+      function drawYongOneStrokeBand(p, marks, options = {}) {
+        if (!marks || marks.length < 3) return null;
+        const left = [];
+        const right = [];
+        for (let i = 0; i < marks.length; i += 1) {
+          const mark = marks[i];
+          const prev = marks[Math.max(0, i - 1)];
+          const next = marks[Math.min(marks.length - 1, i + 1)];
+          const tangent = normalize(next.x - prev.x, next.y - prev.y, mark.dirX ?? 1, mark.dirY ?? 0);
+          const perpX = -tangent.y;
+          const perpY = tangent.x;
+          const leftHalf = mark.left ?? mark.half ?? 5;
+          const rightHalf = mark.right ?? mark.half ?? 5;
+          left.push(p(mark.x + perpX * leftHalf, mark.y + perpY * leftHalf));
+          right.push(p(mark.x - perpX * rightHalf, mark.y - perpY * rightHalf));
+        }
+
+        const path = new Path2D();
+        const smooth = (points, reverse = false) => {
+          const pts = reverse ? [...points].reverse() : points;
+          if (!pts.length) return;
+          if (!reverse) path.moveTo(pts[0].x, pts[0].y);
+          for (let i = 1; i < pts.length; i += 1) {
+            const prev = pts[i - 1];
+            const cur = pts[i];
+            if (i < pts.length - 1) {
+              path.quadraticCurveTo(prev.x, prev.y, (prev.x + cur.x) * 0.5, (prev.y + cur.y) * 0.5);
+            } else {
+              path.quadraticCurveTo(prev.x, prev.y, cur.x, cur.y);
+            }
+          }
+        };
+        smooth(left, false);
+        smooth(right, true);
+        path.closePath();
+
+        ink.save();
+        ink.fillStyle = options.fillStyle ?? "#111411";
+        ink.globalCompositeOperation = "source-over";
+        ink.filter = demoInkMode ? `blur(${options.blur ?? 0.02}px)` : "none";
+        ink.globalAlpha = options.alpha ?? 0.96;
+        ink.fill(path);
+        ink.filter = "none";
+        ink.restore();
+        return path;
+      }
+
+      function drawYongReferenceHengShuGouOneStroke(p) {
+        const body = drawYongOneStrokeBand(
+          p,
+          [
+            { x: -30, y: -44, left: 3.456, right: 4.968, dirX: 1, dirY: -0.1 },
+            { x: -14, y: -47.5, left: 5.184, right: 6.912 },
+            { x: 8, y: -47.2, left: 5.616, right: 7.344 },
+            { x: 30, y: -41.8, left: 4.536, right: 8.856 },
+            { x: 17.5, y: -32.5, left: 11.016, right: 7.992 },
+            { x: 16.2, y: -9, left: 10.152, right: 7.992 },
+            { x: 16.2, y: 18, left: 9.936, right: 7.56 },
+            { x: 15.8, y: 45.05, left: 9.072, right: 6.912 },
+            { x: 14.2, y: 63, left: 7.776, right: 5.832 },
+            { x: 7.2, y: 73, left: 6.696, right: 5.184 },
+            { x: -4.5, y: 69.16, left: 4.968, right: 3.672, dirX: -1, dirY: -0.24 },
+            { x: -11.2, y: 62.55, left: 2.376, right: 3.024, dirX: -1, dirY: -0.12 },
+          ],
+          { alpha: 0.98, blur: 0.01 },
+        );
+
+        if (!body) return;
+        drawYongClippedEdgeNicks(body, p, [
+          { start: [25, -20], end: [18, -15], alpha: 0, width: 0.18 },
+          { start: [24, 13], end: [18, 18], alpha: 0, width: 0.18 },
+          { start: [20, 44], end: [15, 49], alpha: 0, width: 0.16 },
+          { start: [-13, 57], end: [-6, 59], alpha: 0, width: 0.12 },
+        ]);
+      }
+
       function drawYongReferenceHengShuGouFace(p) {
         const face = new Path2D();
         face.moveTo(p(-33, -44).x, p(-33, -44).y);
@@ -6783,7 +6859,7 @@
           for (const stroke of strokesToDraw) drawDemoStroke(stroke);
         }
         if (strokeIndex === -1 || strokeIndex === 0) drawYongReferenceTopDotFace(p);
-        if (strokeIndex === -1 || strokeIndex === 1) drawYongReferenceHengShuGouFace(p);
+        if (strokeIndex === -1 || strokeIndex === 1) drawYongReferenceHengShuGouOneStroke(p);
         if (strokeIndex === -1 || strokeIndex === 2) drawYongReferencePieFace(p);
         if (strokeIndex === -1 || strokeIndex === 3) drawYongReferenceSideDotFace(p);
         if (strokeIndex === -1 || strokeIndex === 4) {
