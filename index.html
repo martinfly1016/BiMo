@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v9.72</h2>
+          <h2>BiMo Contact Patch v9.73</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -446,14 +446,14 @@
             <label class="toggle-row">
               <span>实时接触面</span>
               <span class="switch">
-                <input id="showPatch" type="checkbox" checked />
+                <input id="showPatch" type="checkbox" />
                 <span class="slider"></span>
               </span>
             </label>
             <label class="toggle-row">
               <span>飞白切割</span>
               <span class="switch">
-                <input id="dryCut" type="checkbox" checked />
+                <input id="dryCut" type="checkbox" />
                 <span class="slider"></span>
               </span>
             </label>
@@ -487,13 +487,13 @@
             </label>
             <label class="control">
               <span>边缘</span>
-              <input id="roughness" type="range" min="0" max="0.9" step="0.01" value="0.24" />
-              <output id="roughnessOut">0.24</output>
+              <input id="roughness" type="range" min="0" max="0.9" step="0.01" value="0.04" />
+              <output id="roughnessOut">0.04</output>
             </label>
             <label class="control">
               <span>飞白</span>
-              <input id="dryness" type="range" min="0" max="0.85" step="0.01" value="0.28" />
-              <output id="drynessOut">0.28</output>
+              <input id="dryness" type="range" min="0" max="0.85" step="0.01" value="0" />
+              <output id="drynessOut">0</output>
             </label>
           </section>
 
@@ -582,8 +582,8 @@
       };
 
       const settings = {
-        showPatch: true,
-        dryCut: true,
+        showPatch: false,
+        dryCut: false,
         invertTilt: true,
         tiltRotation: -90,
         tiltStability: 0.82,
@@ -592,8 +592,8 @@
         deform: 1,
         lag: 0.42,
         density: 0.2,
-        roughness: 0.24,
-        dryness: 0.28,
+        roughness: 0.04,
+        dryness: 0,
         mousePressure: 0.48,
       };
 
@@ -6437,7 +6437,7 @@
         const sy = scale * 2.08;
         const cx = rect.width * 0.5;
         const cy = rect.height * 0.36;
-        const p = (x, y) => ({ x: cx + (x + 8) * sx, y: cy + (y + 7) * sy });
+        const p = (x, y) => ({ x: cx + (x + 16) * sx, y: cy + (y + 9) * sy });
         const showConstruction = new URLSearchParams(window.location.search).get("construction") === "1";
         const strokes = showConstruction ? [
           makeDemoTopDot(
@@ -7378,6 +7378,7 @@
       }
 
       function drawMantleFibers(ctx, from, to, model, alpha, dir, perpX, perpY, fromHalf, toHalf) {
+        if (!demoInkMode && settings.roughness < 0.08) return;
         const layers = bristleLayers(model);
         const mantle = layers.mantleRatio;
         if (mantle < 0.08 || model.width < 4) return;
@@ -7639,7 +7640,7 @@
           ctx.fill(contactPath(center.x, center.y, core, stampScale));
         }
 
-        if (settings.roughness > 0.02 && model.width > 5) {
+        if (settings.roughness >= 0.08 && model.width > 5) {
           const flecks = Math.floor(1 + settings.roughness * 5);
           ctx.strokeStyle = "#111411";
           ctx.lineCap = pointed > 0.5 ? "butt" : "round";
