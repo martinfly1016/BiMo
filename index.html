@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.30</h2>
+          <h2>BiMo Contact Patch v10.31</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6288,14 +6288,13 @@
       }
 
       function drawYongReferenceTopDotFace(p) {
-        const top = (x, y) => p(23 + (x - 23) * 1.18 + 29, -70 + (y + 70) * 1.04 - 1);
         const face = new Path2D();
-        face.moveTo(top(8, -83).x, top(8, -83).y);
-        face.bezierCurveTo(top(18, -85).x, top(18, -85).y, top(31, -82).x, top(31, -82).y, top(43, -74).x, top(43, -74).y);
-        face.lineTo(top(40, -68).x, top(40, -68).y);
-        face.bezierCurveTo(top(34, -67).x, top(34, -67).y, top(27, -67).x, top(27, -67).y, top(20, -64).x, top(20, -64).y);
-        face.lineTo(top(25, -73).x, top(25, -73).y);
-        face.bezierCurveTo(top(18, -75).x, top(18, -75).y, top(12, -79).x, top(12, -79).y, top(8, -83).x, top(8, -83).y);
+        face.moveTo(p(30, -85).x, p(30, -85).y);
+        face.bezierCurveTo(p(42, -91).x, p(42, -91).y, p(64, -88).x, p(64, -88).y, p(79, -76).x, p(79, -76).y);
+        face.bezierCurveTo(p(86, -68).x, p(86, -68).y, p(79, -59).x, p(79, -59).y, p(64, -58).x, p(64, -58).y);
+        face.bezierCurveTo(p(50, -57).x, p(50, -57).y, p(38, -62).x, p(38, -62).y, p(25, -53).x, p(25, -53).y);
+        face.lineTo(p(38, -72).x, p(38, -72).y);
+        face.bezierCurveTo(p(34, -77).x, p(34, -77).y, p(31, -81).x, p(31, -81).y, p(30, -85).x, p(30, -85).y);
         face.closePath();
         ink.save();
         ink.fillStyle = "#111411";
