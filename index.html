@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.49</h2>
+          <h2>BiMo Contact Patch v10.50</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -5686,6 +5686,10 @@
           drawDemoSweepNaiStroke(samples);
           return;
         }
+        if (samples.writerNai) {
+          drawYongWriterNaiStroke(samples.writerNai);
+          return;
+        }
         if (samples.sweepPie) {
           drawDemoSweepPieStroke(samples);
           return;
@@ -5883,7 +5887,78 @@
         ink.putImageData(image, 0, 0);
       }
 
-      function buildRightNaiStroke(p) {
+      function drawYongWriterNaiStroke(stroke) {
+        const samples = [];
+        const steps = stroke.steps ?? 72;
+        const [p0, p1, p2, p3] = stroke.points;
+        const [w0, w1, w2, w3] = stroke.widths;
+        const cubic = (a, b, c, d, t) => {
+          const u = 1 - t;
+          return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+        };
+        for (let i = 0; i < steps; i += 1) {
+          const t = i / (steps - 1);
+          samples.push({
+            x: cubic(p0.x, p1.x, p2.x, p3.x, t),
+            y: cubic(p0.y, p1.y, p2.y, p3.y, t),
+            half: cubic(w0, w1, w2, w3, t),
+            t,
+          });
+        }
+
+        const upper = [];
+        const lower = [];
+        for (let i = 0; i < samples.length; i += 1) {
+          const cur = samples[i];
+          const prev = samples[Math.max(0, i - 1)];
+          const next = samples[Math.min(samples.length - 1, i + 1)];
+          const tangent = normalize(next.x - prev.x, next.y - prev.y, 1, 0);
+          const perpX = -tangent.y;
+          const perpY = tangent.x;
+          const press = Math.sin(Math.PI * clamp(cur.t, 0, 1));
+          const upperHalf = cur.half * (stroke.upperBias ?? 0.62) * (1 + press * 0.08);
+          const lowerHalf = cur.half * (stroke.lowerBias ?? 1.24) * (1 + press * 0.18);
+          upper.push({ x: cur.x + perpX * upperHalf, y: cur.y + perpY * upperHalf });
+          lower.push({ x: cur.x - perpX * lowerHalf, y: cur.y - perpY * lowerHalf });
+        }
+
+        const path = new Path2D();
+        path.moveTo(upper[0].x, upper[0].y);
+        for (let i = 1; i < upper.length; i += 1) {
+          const prev = upper[i - 1];
+          const cur = upper[i];
+          path.quadraticCurveTo(prev.x, prev.y, (prev.x + cur.x) * 0.5, (prev.y + cur.y) * 0.5);
+        }
+        for (let i = lower.length - 1; i >= 0; i -= 1) {
+          const cur = lower[i];
+          path.lineTo(cur.x, cur.y);
+        }
+        path.closePath();
+
+        ink.save();
+        ink.fillStyle = "#111411";
+        ink.globalCompositeOperation = "source-over";
+        ink.filter = demoInkMode ? "blur(0.015px)" : "none";
+        ink.globalAlpha = stroke.alpha ?? 0.96;
+        ink.fill(path);
+        ink.filter = "none";
+        ink.restore();
+      }
+
+      function buildRightNaiStroke(p, useWriter = false) {
+        if (useWriter) {
+          const unit = Math.abs(p(1, 0).x - p(0, 0).x) || 1;
+          return {
+            writerNai: {
+              points: [p(33, -8), p(57, 11), p(103, 48), p(178, 61)],
+              widths: [12.4, 21.6, 33.6, 5.6].map((value) => value * unit),
+              upperBias: 0.62,
+              lowerBias: 1.24,
+              alpha: 0.97,
+              steps: 76,
+            },
+          };
+        }
         return makeDemoSweepNai(
           [
             makeDemoStroke(
@@ -6398,8 +6473,11 @@
         const cx = rect.width * 0.5;
         const cy = rect.height * 0.36;
         const p = (x, y) => ({ x: cx + (x + 30) * sx + 1.5, y: cy + (y + 9) * sy + 2.4 });
-        const showConstruction = new URLSearchParams(window.location.search).get("construction") === "1";
-        const strokes = showConstruction ? [
+        const yongParams = new URLSearchParams(window.location.search);
+        const showConstruction = yongParams.get("construction") === "1";
+        const strokeParam = yongParams.get("stroke");
+        const showWriter = yongParams.get("writer") === "1" && strokeParam === "4";
+        const strokes = showConstruction || showWriter ? [
           makeDemoTopDot(
 	            [p(8, -73), p(18, -78), p(36, -68), p(5, -59)],
             {
@@ -6718,20 +6796,18 @@
 				              coreAlpha: 0.08,
             },
           ),
-          buildRightNaiStroke(p),
+          buildRightNaiStroke(p, showWriter),
         ] : [];
 
-        const strokeParam = new URLSearchParams(window.location.search).get("stroke");
         const strokeIndex = strokeParam === null ? -1 : Number(strokeParam);
         const strokesToDraw = Number.isInteger(strokeIndex) && strokeIndex >= 0 && strokeIndex < strokes.length ? [strokes[strokeIndex]] : strokes;
         demoInkMode = true;
-        singleFaceInkMode = !showConstruction;
-        if (showConstruction) {
+        singleFaceInkMode = !(showConstruction || showWriter);
+        if (showConstruction || showWriter) {
           for (const stroke of strokesToDraw) drawDemoStroke(stroke);
-        }
-        if (!showConstruction && strokeIndex === -1) {
+        } else if (strokeIndex === -1) {
           drawYongReferenceVideoTraceFace(p);
-        } else if (!showConstruction && Number.isInteger(strokeIndex) && strokeIndex >= 0 && strokeIndex <= 4) {
+        } else if (Number.isInteger(strokeIndex) && strokeIndex >= 0 && strokeIndex <= 4) {
           drawYongReferenceVideoTraceStroke(p, strokeIndex);
         } else {
           if (strokeIndex === -1 || strokeIndex === 0) drawYongReferenceTopDotFace(p);
