@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.50</h2>
+          <h2>BiMo Contact Patch v10.51</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -5945,6 +5945,140 @@
         ink.restore();
       }
 
+      const WRITER_STROKE_SPECS = {
+        right_side_dot_v1: {
+          id: "right_side_dot",
+          type: "side_dot",
+          imageSize: [240, 240],
+          source: "bimo_video_nai final-red-minus-initial, ROI 45,25,195,215",
+          metrics: { iou: 0.7673, areaRatio: 0.9116 },
+          centerline: [
+            { x: 134.41, y: 114.03, width: 7.13 },
+            { x: 142.08, y: 124.18, width: 7.76 },
+            { x: 148.16, y: 130.5, width: 7.91 },
+            { x: 157.82, y: 138.64, width: 7.34 },
+            { x: 163.28, y: 140.53, width: 5.73 },
+            { x: 171.36, y: 141, width: 2.16 },
+          ],
+        },
+        right_nai_full_v4: {
+          id: "right_nai",
+          type: "nai",
+          imageSize: [480, 480],
+          source: "bimo_nai_video_frames final-red-minus-initial, ROI 260,220,370,330",
+          metrics: { iou: 0.5728, areaRatio: 1.2255 },
+          centerline: [
+            { x: 265, y: 222, width: 10.5 },
+            { x: 270, y: 238, width: 25.2 },
+            { x: 288, y: 263, width: 29.4 },
+            { x: 318, y: 282, width: 18.9 },
+            { x: 345, y: 284, width: 5.25 },
+          ],
+        },
+      };
+
+      function transformWriterSpecPoint(spec, point, frame) {
+        return {
+          x: frame.x + point.x * frame.scale,
+          y: frame.y + point.y * frame.scale,
+          width: point.width * frame.scale,
+        };
+      }
+
+      function interpolateWriterSpecPoints(points, stepsPerSegment = 10) {
+        if (points.length < 2) return points.slice();
+        const samples = [];
+        for (let i = 0; i < points.length - 1; i += 1) {
+          const a = points[i];
+          const b = points[i + 1];
+          for (let j = 0; j < stepsPerSegment; j += 1) {
+            const t = j / stepsPerSegment;
+            samples.push({
+              x: lerp(a.x, b.x, t),
+              y: lerp(a.y, b.y, t),
+              width: lerp(a.width, b.width, t),
+            });
+          }
+        }
+        samples.push(points[points.length - 1]);
+        return samples;
+      }
+
+      function drawWriterSpecStroke(specName) {
+        const spec = WRITER_STROKE_SPECS[specName];
+        if (!spec) return false;
+        const rect = stage.getBoundingClientRect();
+        const targetSize = Math.min(rect.width * 0.78, rect.height * 0.78, 560);
+        const frame = {
+          scale: targetSize / Math.max(spec.imageSize[0], spec.imageSize[1]),
+          x: rect.width * 0.5 - (spec.imageSize[0] * targetSize) / Math.max(spec.imageSize[0], spec.imageSize[1]) / 2,
+          y: rect.height * 0.47 - (spec.imageSize[1] * targetSize) / Math.max(spec.imageSize[0], spec.imageSize[1]) / 2,
+        };
+        const transformed = spec.centerline.map((point) => transformWriterSpecPoint(spec, point, frame));
+        const samples = interpolateWriterSpecPoints(transformed, 12);
+        const upper = [];
+        const lower = [];
+        for (let i = 0; i < samples.length; i += 1) {
+          const current = samples[i];
+          const prev = samples[Math.max(0, i - 1)];
+          const next = samples[Math.min(samples.length - 1, i + 1)];
+          const tangent = normalize(next.x - prev.x, next.y - prev.y, 1, 0);
+          const perpX = -tangent.y;
+          const perpY = tangent.x;
+          const progress = i / Math.max(1, samples.length - 1);
+          const lift = 1 - smoothstep(0.72, 1, progress) * 0.38;
+          const half = Math.max(0.7, samples[i].width * 0.5 * lift);
+          const upperHalf = half * (spec.type === "nai" ? 0.72 : 0.82);
+          const lowerHalf = half * (spec.type === "nai" ? 1.18 : 1.08);
+          upper.push({ x: current.x + perpX * upperHalf, y: current.y + perpY * upperHalf });
+          lower.push({ x: current.x - perpX * lowerHalf, y: current.y - perpY * lowerHalf });
+        }
+
+        const strokePath = new Path2D();
+        strokePath.moveTo(upper[0].x, upper[0].y);
+        for (let i = 1; i < upper.length; i += 1) {
+          const a = upper[i - 1];
+          const b = upper[i];
+          strokePath.quadraticCurveTo(a.x, a.y, (a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
+        }
+        for (let i = lower.length - 1; i >= 0; i -= 1) {
+          const a = lower[i];
+          strokePath.lineTo(a.x, a.y);
+        }
+        strokePath.closePath();
+
+        ink.save();
+        ink.fillStyle = "#111411";
+        ink.globalAlpha = 0.96;
+        ink.globalCompositeOperation = "source-over";
+        ink.filter = demoInkMode ? "blur(0.02px)" : "none";
+        ink.fill(strokePath);
+        ink.filter = "none";
+        ink.globalAlpha = 0.18;
+        ink.lineCap = "round";
+        ink.lineJoin = "round";
+        for (let i = 1; i < samples.length; i += 1) {
+          const a = samples[i - 1];
+          const b = samples[i];
+          ink.lineWidth = Math.max(1, ((a.width + b.width) * 0.18));
+          ink.beginPath();
+          ink.moveTo(a.x, a.y);
+          ink.lineTo(b.x, b.y);
+          ink.stroke();
+        }
+        ink.restore();
+
+        overlay.save();
+        overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
+        overlay.lineWidth = 1;
+        overlay.strokeRect(frame.x, frame.y, spec.imageSize[0] * frame.scale, spec.imageSize[1] * frame.scale);
+        overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
+        overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        overlay.fillText(`${specName} IoU ${spec.metrics.iou}`, frame.x + 8, frame.y + 18);
+        overlay.restore();
+        return true;
+      }
+
       function buildRightNaiStroke(p, useWriter = false) {
         if (useWriter) {
           const unit = Math.abs(p(1, 0).x - p(0, 0).x) || 1;
@@ -6474,6 +6608,19 @@
         const cy = rect.height * 0.36;
         const p = (x, y) => ({ x: cx + (x + 30) * sx + 1.5, y: cy + (y + 9) * sy + 2.4 });
         const yongParams = new URLSearchParams(window.location.search);
+        const writerSpecParam = yongParams.get("writerSpec");
+        if (writerSpecParam) {
+          const canvasRect = stage.getBoundingClientRect();
+          overlay.clearRect(0, 0, canvasRect.width, canvasRect.height);
+          demoInkMode = true;
+          singleFaceInkMode = false;
+          if (drawWriterSpecStroke(writerSpecParam)) {
+            softenDemoInk();
+          }
+          demoInkMode = false;
+          updateHud();
+          return;
+        }
         const showConstruction = yongParams.get("construction") === "1";
         const strokeParam = yongParams.get("stroke");
         const showWriter = yongParams.get("writer") === "1" && strokeParam === "4";
