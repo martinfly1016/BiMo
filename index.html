@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.18</h2>
+          <h2>BiMo Contact Patch v10.19</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6147,11 +6147,12 @@
           const perpY = tangent.x;
           const leftHalf = mark.left ?? mark.half ?? 5;
           const rightHalf = mark.right ?? mark.half ?? 5;
-          left.push(p(mark.x + perpX * leftHalf, mark.y + perpY * leftHalf));
-          right.push(p(mark.x - perpX * rightHalf, mark.y - perpY * rightHalf));
+          left.push({ ...p(mark.x + perpX * leftHalf, mark.y + perpY * leftHalf), markIndex: i });
+          right.push({ ...p(mark.x - perpX * rightHalf, mark.y - perpY * rightHalf), markIndex: i });
         }
 
         const path = new Path2D();
+        const hard = new Set(options.hardIndices ?? []);
         const smooth = (points, reverse = false) => {
           const pts = reverse ? [...points].reverse() : points;
           if (!pts.length) return;
@@ -6159,7 +6160,10 @@
           for (let i = 1; i < pts.length; i += 1) {
             const prev = pts[i - 1];
             const cur = pts[i];
-            if (i < pts.length - 1) {
+            if (hard.has(prev.markIndex) || hard.has(cur.markIndex)) {
+              path.lineTo(prev.x, prev.y);
+              path.lineTo(cur.x, cur.y);
+            } else if (i < pts.length - 1) {
               path.quadraticCurveTo(prev.x, prev.y, (prev.x + cur.x) * 0.5, (prev.y + cur.y) * 0.5);
             } else {
               path.quadraticCurveTo(prev.x, prev.y, cur.x, cur.y);
@@ -6188,17 +6192,17 @@
             { x: -30, y: -41, left: 3.456, right: 4.968, dirX: 1, dirY: -0.1 },
             { x: -14, y: -47.5, left: 5.184, right: 6.912 },
             { x: 8, y: -47.2, left: 5.616, right: 7.344 },
-            { x: 33, y: -41.8, left: 4.536, right: 8.856 },
-            { x: 18.85, y: -29.5, left: 9.12125, right: 6.61738 },
-            { x: 16.2, y: -6, left: 8.06963, right: 6.35268 },
-            { x: 16.2, y: 21, left: 7.89793, right: 6.00929 },
+            { x: 33, y: -41.8, left: 4.536, right: 7.79328 },
+            { x: 18.85, y: -29.5, left: 8.93883, right: 6.08799 },
+            { x: 16.2, y: -6, left: 7.90824, right: 5.84447 },
+            { x: 16.2, y: 21, left: 7.73997, right: 5.52855 },
             { x: 15.8, y: 51.45, left: 7.21116, right: 5.49421 },
             { x: 14.2, y: 72.8, left: 7.12157, right: 5.93464 },
             { x: 7.2, y: 86.2, left: 6.38798, right: 5.49504 },
             { x: -5.4, y: 85.76, left: 5.26608, right: 3.89232, dirX: -1, dirY: -0.24 },
             { x: -13.2, y: 82.55, left: 2.06522, right: 2.82079, dirX: -1, dirY: -0.12 },
           ],
-          { alpha: 0.98, blur: 0.01 },
+          { alpha: 0.98, blur: 0.01, hardIndices: [3, 4, 8, 9] },
         );
 
         if (!body) return;
