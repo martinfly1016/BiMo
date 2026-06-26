@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.48</h2>
+          <h2>BiMo Contact Patch v10.49</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6323,10 +6323,16 @@
       function fillYongTracePath(path, alpha = 0.98) {
         ink.save();
         ink.fillStyle = "#111411";
+        ink.strokeStyle = "#111411";
+        ink.lineJoin = "round";
+        ink.lineCap = "round";
         ink.globalCompositeOperation = "source-over";
         ink.filter = demoInkMode ? "blur(0.01px)" : "none";
         ink.globalAlpha = alpha;
         ink.fill(path);
+        ink.globalAlpha = 0.7;
+        ink.lineWidth = 2;
+        ink.stroke(path);
         ink.filter = "none";
         ink.restore();
       }
