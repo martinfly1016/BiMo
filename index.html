@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.14</h2>
+          <h2>BiMo Contact Patch v10.15</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6290,22 +6290,22 @@
       }
 
       function drawYongReferenceTopDotFace(p) {
-        const top = (x, y) => p(23 + (x - 23) * 1.18 + 24, -70 + (y + 70) * 1.05 - 5);
+        const top = (x, y) => p(23 + (x - 23) * 1.3 + 26, -70 + (y + 70) * 1.24 - 3);
         const body = drawYongOneStrokeBand(
           top,
           [
-            { x: 8.8, y: -82.8, left: 2.816, right: 4.096, dirX: 1, dirY: 0.18 },
-            { x: 18.5, y: -80.5, left: 6.144, right: 8.192 },
-            { x: 31.5, y: -75.4, left: 8.32, right: 10.624 },
-            { x: 42, y: -69.4, left: 6.912, right: 9.216 },
-            { x: 28, y: -64, left: 3.84, right: 6.144, dirX: -0.8, dirY: 0.45 },
+            { x: 8.8, y: -82.8, left: 3.7171, right: 5.4067, dirX: 1, dirY: 0.18 },
+            { x: 18.5, y: -80.5, left: 8.1101, right: 10.8134 },
+            { x: 31.5, y: -75.4, left: 10.9824, right: 14.0237 },
+            { x: 42, y: -69.4, left: 9.1238, right: 12.1651 },
+            { x: 28, y: -64, left: 4.5619, right: 7.2991, dirX: -0.8, dirY: 0.45 },
           ],
           { alpha: 0.94, blur: 0.01 },
         );
         if (!body) return;
         drawYongClippedEdgeNicks(body, top, [
-          { start: [7, -77], end: [14, -72], alpha: 0, width: 0.24 },
-          { start: [39, -57], end: [32, -59], alpha: 0, width: 0.2 },
+          { start: [7, -77], end: [14, -72], alpha: 0, width: 0.2 },
+          { start: [39, -57], end: [32, -59], alpha: 0, width: 0.16 },
         ]);
       }
 
