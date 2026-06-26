@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.52</h2>
+          <h2>BiMo Contact Patch v10.54</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -5961,6 +5961,21 @@
             { x: 171.36, y: 141, width: 2.16 },
           ],
         },
+        right_side_dot_480_v1: {
+          id: "right_side_dot",
+          type: "side_dot",
+          imageSize: [480, 480],
+          source: "bimo_nai_video_frames final-red-minus-initial, ROI 285,165,350,235",
+          metrics: { iou: 0.7076, areaRatio: 1.1457 },
+          centerline: [
+            { x: 287.11, y: 208.49, width: 6.86 },
+            { x: 293.52, y: 202.97, width: 8.45 },
+            { x: 298.55, y: 199.13, width: 9.9 },
+            { x: 306.08, y: 191.06, width: 16.73 },
+            { x: 310.23, y: 189.1, width: 15.33 },
+            { x: 316.47, y: 189.83, width: 7.89 },
+          ],
+        },
         right_nai_full_v4: {
           id: "right_nai",
           type: "nai",
@@ -5976,6 +5991,27 @@
           ],
         },
       };
+
+      const WRITER_SEQUENCES = {
+        right_pair_v1: {
+          imageSize: [480, 480],
+          strokes: [
+            { spec: "right_side_dot_480_v1", start: 0, end: 0.34 },
+            { spec: "right_nai_full_v4", start: 0.34, end: 1 },
+          ],
+        },
+      };
+
+      function writerFrameForSize(imageSize) {
+        const rect = stage.getBoundingClientRect();
+        const targetSize = Math.min(rect.width * 0.78, rect.height * 0.78, 560);
+        const maxSide = Math.max(imageSize[0], imageSize[1]);
+        return {
+          scale: targetSize / maxSide,
+          x: rect.width * 0.5 - (imageSize[0] * targetSize) / maxSide / 2,
+          y: rect.height * 0.47 - (imageSize[1] * targetSize) / maxSide / 2,
+        };
+      }
 
       function transformWriterSpecPoint(spec, point, frame) {
         return {
@@ -6008,13 +6044,7 @@
         const spec = WRITER_STROKE_SPECS[specName];
         if (!spec) return false;
         const visibleProgress = clamp(options.progress ?? 1, 0.02, 1);
-        const rect = stage.getBoundingClientRect();
-        const targetSize = Math.min(rect.width * 0.78, rect.height * 0.78, 560);
-        const frame = {
-          scale: targetSize / Math.max(spec.imageSize[0], spec.imageSize[1]),
-          x: rect.width * 0.5 - (spec.imageSize[0] * targetSize) / Math.max(spec.imageSize[0], spec.imageSize[1]) / 2,
-          y: rect.height * 0.47 - (spec.imageSize[1] * targetSize) / Math.max(spec.imageSize[0], spec.imageSize[1]) / 2,
-        };
+        const frame = options.frame ?? writerFrameForSize(spec.imageSize);
         const transformed = spec.centerline.map((point) => transformWriterSpecPoint(spec, point, frame));
         const allSamples = interpolateWriterSpecPoints(transformed, 12);
         const visibleCount = Math.max(2, Math.min(allSamples.length, Math.round(1 + (allSamples.length - 1) * visibleProgress)));
@@ -6084,14 +6114,16 @@
         }
         ink.restore();
 
-        overlay.save();
-        overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
-        overlay.lineWidth = 1;
-        overlay.strokeRect(frame.x, frame.y, spec.imageSize[0] * frame.scale, spec.imageSize[1] * frame.scale);
-        overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
-        overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        overlay.fillText(`${specName} IoU ${spec.metrics.iou} progress ${visibleProgress.toFixed(2)}`, frame.x + 8, frame.y + 18);
-        overlay.restore();
+        if (options.label !== false) {
+          overlay.save();
+          overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
+          overlay.lineWidth = 1;
+          overlay.strokeRect(frame.x, frame.y, spec.imageSize[0] * frame.scale, spec.imageSize[1] * frame.scale);
+          overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
+          overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+          overlay.fillText(`${specName} IoU ${spec.metrics.iou} progress ${visibleProgress.toFixed(2)}`, frame.x + 8, frame.y + 18);
+          overlay.restore();
+        }
         return true;
       }
 
@@ -6114,6 +6146,345 @@
           const elapsed = now - start;
           const progress = clamp(elapsed / duration, 0.02, 1);
           if (!renderWriterSpecFrame(specName, progress)) return;
+          if (progress < 1) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }
+
+      function drawWriterSequence(sequenceName, progress) {
+        const sequence = WRITER_SEQUENCES[sequenceName];
+        if (!sequence) return false;
+        const frame = writerFrameForSize(sequence.imageSize);
+        let rendered = false;
+        for (const stroke of sequence.strokes) {
+          if (progress < stroke.start) continue;
+          const localProgress = progress >= stroke.end ? 1 : clamp((progress - stroke.start) / (stroke.end - stroke.start), 0.02, 1);
+          rendered = drawWriterSpecStroke(stroke.spec, { progress: localProgress, frame, label: false }) || rendered;
+        }
+        overlay.save();
+        overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
+        overlay.lineWidth = 1;
+        overlay.strokeRect(frame.x, frame.y, sequence.imageSize[0] * frame.scale, sequence.imageSize[1] * frame.scale);
+        overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
+        overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        overlay.fillText(`${sequenceName} progress ${progress.toFixed(2)}`, frame.x + 8, frame.y + 18);
+        overlay.restore();
+        return rendered;
+      }
+
+      function renderWriterSequenceFrame(sequenceName, progress) {
+        clearInk();
+        const canvasRect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, canvasRect.width, canvasRect.height);
+        demoInkMode = true;
+        singleFaceInkMode = false;
+        const rendered = drawWriterSequence(sequenceName, progress);
+        if (rendered) softenDemoInk();
+        demoInkMode = false;
+        updateHud();
+        return rendered;
+      }
+
+      function animateWriterSequence(sequenceName, duration = 2600) {
+        const start = performance.now();
+        const frame = (now) => {
+          const elapsed = now - start;
+          const progress = clamp(elapsed / duration, 0.02, 1);
+          if (!renderWriterSequenceFrame(sequenceName, progress)) return;
+          if (progress < 1) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }
+
+      const SWEPT_WRITER_STROKES = {
+        right_nai_v1: {
+          id: "right_nai",
+          type: "nai",
+          imageSize: [480, 480],
+          viewBox: [245, 205, 135, 108],
+          source: "human-calligraphy swept-contact MVP, initialized from bimo_nai_video_frames ROI 260,220,370,330",
+          centerline: [
+            { x: 263, y: 220 },
+            { x: 271, y: 240 },
+            { x: 292, y: 267 },
+            { x: 323, y: 286 },
+            { x: 358, y: 284 },
+          ],
+          pressureStops: [
+            [0, 0.12],
+            [0.14, 0.54],
+            [0.46, 0.94],
+            [0.7, 0.66],
+            [0.88, 0.16],
+            [1, 0.035],
+          ],
+          headingStops: [
+            [0, -0.22],
+            [0.36, -0.12],
+            [0.72, 0.18],
+            [1, 0.04],
+          ],
+          dragStops: [
+            [0, 1.2],
+            [0.45, 8.8],
+            [0.78, 12.4],
+            [1, 2.2],
+          ],
+          upperStops: [
+            [0, 0.52],
+            [0.48, 0.62],
+            [0.78, 0.34],
+            [1, 0.2],
+          ],
+          lowerStops: [
+            [0, 0.84],
+            [0.44, 1.46],
+            [0.72, 1.18],
+            [1, 0.22],
+          ],
+          baseWidth: 2.4,
+          maxWidth: 40,
+          lengthScale: 1.3,
+          samples: 96,
+        },
+      };
+
+      function catmullRomPoint(points, t) {
+        if (points.length === 1) return points[0];
+        const span = (points.length - 1) * clamp(t, 0, 1);
+        const i = Math.min(points.length - 2, Math.floor(span));
+        const local = span - i;
+        const p0 = points[Math.max(0, i - 1)];
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        const p3 = points[Math.min(points.length - 1, i + 2)];
+        const tt = local * local;
+        const ttt = tt * local;
+        return {
+          x:
+            0.5 *
+            ((2 * p1.x) +
+              (-p0.x + p2.x) * local +
+              (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * tt +
+              (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * ttt),
+          y:
+            0.5 *
+            ((2 * p1.y) +
+              (-p0.y + p2.y) * local +
+              (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * tt +
+              (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * ttt),
+        };
+      }
+
+      function transformSweptStrokePoint(point, frame) {
+        return {
+          x: frame.x + (point.x - (frame.sourceX ?? 0)) * frame.scale,
+          y: frame.y + (point.y - (frame.sourceY ?? 0)) * frame.scale,
+        };
+      }
+
+      function sweptFrameForSpec(spec) {
+        if (!spec.viewBox) return writerFrameForSize(spec.imageSize);
+        const [sourceX, sourceY, width, height] = spec.viewBox;
+        const frame = writerFrameForSize([width, height]);
+        return {
+          ...frame,
+          sourceX,
+          sourceY,
+          viewWidth: width,
+          viewHeight: height,
+        };
+      }
+
+      function makeSweptContactPath(contact) {
+        const dirX = contact.headingX;
+        const dirY = contact.headingY;
+        const perpX = -dirY;
+        const perpY = dirX;
+        const forward = contact.length * lerp(0.42, 0.72, contact.pointed);
+        const back = contact.length * lerp(0.58, 0.26, contact.pointed);
+        const upper = contact.half * contact.upper;
+        const lower = contact.half * contact.lower;
+        const tipHalf = contact.half * lerp(0.26, 0.035, contact.pointed);
+        const heelRound = contact.half * lerp(0.28, 0.08, contact.pointed);
+        const tip = { x: contact.x + dirX * forward, y: contact.y + dirY * forward };
+        const heel = { x: contact.x - dirX * back, y: contact.y - dirY * back };
+        const path = new Path2D();
+        path.moveTo(tip.x + perpX * tipHalf, tip.y + perpY * tipHalf);
+        path.bezierCurveTo(
+          contact.x + perpX * upper,
+          contact.y + perpY * upper,
+          heel.x + perpX * upper,
+          heel.y + perpY * upper,
+          heel.x - dirX * heelRound,
+          heel.y - dirY * heelRound,
+        );
+        path.bezierCurveTo(
+          heel.x - perpX * lower,
+          heel.y - perpY * lower,
+          contact.x - perpX * lower,
+          contact.y - perpY * lower,
+          tip.x - perpX * tipHalf,
+          tip.y - perpY * tipHalf,
+        );
+        path.quadraticCurveTo(tip.x + dirX * tipHalf * 0.35, tip.y + dirY * tipHalf * 0.35, tip.x + perpX * tipHalf, tip.y + perpY * tipHalf);
+        path.closePath();
+        return path;
+      }
+
+      function fillSweptBridge(ctx, a, b) {
+        const path = new Path2D();
+        path.moveTo(a.upperX, a.upperY);
+        path.quadraticCurveTo((a.upperX + b.upperX) * 0.5, (a.upperY + b.upperY) * 0.5, b.upperX, b.upperY);
+        path.lineTo(b.lowerX, b.lowerY);
+        path.quadraticCurveTo((a.lowerX + b.lowerX) * 0.5, (a.lowerY + b.lowerY) * 0.5, a.lowerX, a.lowerY);
+        path.closePath();
+        ctx.fill(path);
+      }
+
+      function fillSweptBody(ctx, contacts) {
+        if (contacts.length < 2) return;
+        const path = new Path2D();
+        path.moveTo(contacts[0].upperX, contacts[0].upperY);
+        for (let i = 1; i < contacts.length; i += 1) {
+          const prev = contacts[i - 1];
+          const current = contacts[i];
+          path.quadraticCurveTo(prev.upperX, prev.upperY, (prev.upperX + current.upperX) * 0.5, (prev.upperY + current.upperY) * 0.5);
+        }
+        const last = contacts[contacts.length - 1];
+        path.lineTo(last.lowerX, last.lowerY);
+        for (let i = contacts.length - 2; i >= 0; i -= 1) {
+          const next = contacts[i + 1];
+          const current = contacts[i];
+          path.quadraticCurveTo(next.lowerX, next.lowerY, (next.lowerX + current.lowerX) * 0.5, (next.lowerY + current.lowerY) * 0.5);
+        }
+        path.closePath();
+        ctx.fill(path);
+      }
+
+      function buildSweptWriterContacts(spec, frame, progress) {
+        const transformed = spec.centerline.map((point) => transformSweptStrokePoint(point, frame));
+        const sampleCount = Math.max(4, Math.round((spec.samples ?? 80) * clamp(progress, 0.02, 1)));
+        const contacts = [];
+        let width = null;
+        let heading = null;
+        for (let i = 0; i < sampleCount; i += 1) {
+          const t = sampleCount === 1 ? 1 : (i / (sampleCount - 1)) * clamp(progress, 0.02, 1);
+          const point = catmullRomPoint(transformed, t);
+          const prev = catmullRomPoint(transformed, Math.max(0, t - 0.012));
+          const next = catmullRomPoint(transformed, Math.min(1, t + 0.012));
+          const tangent = normalize(next.x - prev.x, next.y - prev.y, 1, 0);
+          const pressure = valueFromStops(t, spec.pressureStops) ?? 0.5;
+          const targetWidth = (spec.baseWidth + spec.maxWidth * Math.pow(pressure, 0.78)) * frame.scale;
+          width = width === null ? targetWidth : lerp(width, targetWidth, 0.22);
+          const headingOffset = valueFromStops(t, spec.headingStops) ?? 0;
+          const targetHeading = normalize(
+            tangent.x * Math.cos(headingOffset) - tangent.y * Math.sin(headingOffset),
+            tangent.x * Math.sin(headingOffset) + tangent.y * Math.cos(headingOffset),
+            tangent.x,
+            tangent.y,
+          );
+          heading = heading
+            ? normalize(lerp(heading.x, targetHeading.x, 0.16), lerp(heading.y, targetHeading.y, 0.16), targetHeading.x, targetHeading.y)
+            : targetHeading;
+          const normal = { x: -tangent.y, y: tangent.x };
+          const drag = (valueFromStops(t, spec.dragStops) ?? 4) * pressure * frame.scale;
+          const upper = valueFromStops(t, spec.upperStops) ?? 0.6;
+          const lower = valueFromStops(t, spec.lowerStops) ?? 1.0;
+          const pointed = 1 - smoothstep(0.08, 0.58, pressure) + smoothstep(0.72, 1, t) * 0.78;
+          const center = {
+            x: point.x - tangent.x * drag + normal.x * width * (lower - upper) * 0.08,
+            y: point.y - tangent.y * drag + normal.y * width * (lower - upper) * 0.08,
+          };
+          const half = Math.max(0.7, width * 0.5);
+          contacts.push({
+            x: center.x,
+            y: center.y,
+            pressure,
+            half,
+            length: Math.max(1.2, width * (spec.lengthScale ?? 1.1) * lerp(0.78, 1.18, pressure)),
+            headingX: heading.x,
+            headingY: heading.y,
+            upper,
+            lower,
+            pointed: clamp(pointed, 0, 1),
+            upperX: center.x + normal.x * half * upper,
+            upperY: center.y + normal.y * half * upper,
+            lowerX: center.x - normal.x * half * lower,
+            lowerY: center.y - normal.y * half * lower,
+          });
+        }
+        return contacts;
+      }
+
+      function drawSweptWriterStroke(strokeName, options = {}) {
+        const spec = SWEPT_WRITER_STROKES[strokeName];
+        if (!spec) return false;
+        const progress = clamp(options.progress ?? 1, 0.02, 1);
+        const frame = sweptFrameForSpec(spec);
+        const rect = stage.getBoundingClientRect();
+        const coverageCanvas = document.createElement("canvas");
+        coverageCanvas.width = Math.max(1, Math.round(rect.width));
+        coverageCanvas.height = Math.max(1, Math.round(rect.height));
+        const coverage = coverageCanvas.getContext("2d");
+        coverage.fillStyle = "#111411";
+        coverage.globalAlpha = 1;
+        coverage.globalCompositeOperation = "source-over";
+        const contacts = buildSweptWriterContacts(spec, frame, progress);
+        fillSweptBody(coverage, contacts);
+        for (let i = 0; i < contacts.length; i += 1) {
+          if (i === 0 || (i === contacts.length - 1 && progress > 0.96)) {
+            coverage.fill(makeSweptContactPath(contacts[i]));
+          }
+        }
+
+        ink.save();
+        ink.globalCompositeOperation = "source-over";
+        ink.globalAlpha = 0.96;
+        ink.drawImage(coverageCanvas, 0, 0);
+        ink.restore();
+
+        overlay.save();
+        overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
+        overlay.lineWidth = 1;
+        overlay.strokeRect(frame.x, frame.y, (frame.viewWidth ?? spec.imageSize[0]) * frame.scale, (frame.viewHeight ?? spec.imageSize[1]) * frame.scale);
+        overlay.strokeStyle = "rgba(190, 86, 32, 0.38)";
+        overlay.lineWidth = 1.25;
+        overlay.beginPath();
+        const transformed = spec.centerline.map((point) => transformSweptStrokePoint(point, frame));
+        transformed.forEach((point, index) => {
+          if (index === 0) overlay.moveTo(point.x, point.y);
+          else overlay.lineTo(point.x, point.y);
+        });
+        overlay.stroke();
+        overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
+        overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+        overlay.fillText(`${strokeName} swept-contact progress ${progress.toFixed(2)}`, frame.x + 8, frame.y + 18);
+        overlay.restore();
+        if (contacts.length) {
+          const last = contacts[contacts.length - 1];
+          brush.width = last.half * 2;
+          brush.length = last.length;
+          brush.pressure = last.pressure;
+          brush.speed = 0;
+        }
+        updateHud();
+        return true;
+      }
+
+      function renderSweptWriterFrame(strokeName, progress) {
+        clearInk();
+        const rect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, rect.width, rect.height);
+        return drawSweptWriterStroke(strokeName, { progress });
+      }
+
+      function animateSweptWriterStroke(strokeName, duration = 1900) {
+        const start = performance.now();
+        const frame = (now) => {
+          const elapsed = now - start;
+          const progress = clamp(elapsed / duration, 0.02, 1);
+          if (!renderSweptWriterFrame(strokeName, progress)) return;
           if (progress < 1) requestAnimationFrame(frame);
         };
         requestAnimationFrame(frame);
@@ -6648,6 +7019,28 @@
         const cy = rect.height * 0.36;
         const p = (x, y) => ({ x: cx + (x + 30) * sx + 1.5, y: cy + (y + 9) * sy + 2.4 });
         const yongParams = new URLSearchParams(window.location.search);
+        const sweptStrokeParam = yongParams.get("sweptStroke");
+        if (sweptStrokeParam) {
+          const progressParam = Number(yongParams.get("progress"));
+          const writerProgress = Number.isFinite(progressParam) ? clamp(progressParam, 0.02, 1) : 1;
+          if (yongParams.get("animate") === "1") {
+            animateSweptWriterStroke(sweptStrokeParam, 1900);
+          } else {
+            renderSweptWriterFrame(sweptStrokeParam, writerProgress);
+          }
+          return;
+        }
+        const writerSequenceParam = yongParams.get("writerSequence");
+        if (writerSequenceParam) {
+          const progressParam = Number(yongParams.get("progress"));
+          const writerProgress = Number.isFinite(progressParam) ? clamp(progressParam, 0.02, 1) : 1;
+          if (yongParams.get("animate") === "1") {
+            animateWriterSequence(writerSequenceParam, 2600);
+          } else {
+            renderWriterSequenceFrame(writerSequenceParam, writerProgress);
+          }
+          return;
+        }
         const writerSpecParam = yongParams.get("writerSpec");
         if (writerSpecParam) {
           const progressParam = Number(yongParams.get("progress"));
