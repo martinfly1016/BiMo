@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.55</h2>
+          <h2>BiMo Contact Patch v10.56</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6342,7 +6342,7 @@
         ctx.fill(path);
       }
 
-      function fillSweptBody(ctx, contacts) {
+      function fillSweptBody(ctx, contacts, options = {}) {
         if (contacts.length < 2) return;
         const path = new Path2D();
         path.moveTo(contacts[0].upperX, contacts[0].upperY);
@@ -6352,7 +6352,16 @@
           path.quadraticCurveTo(prev.upperX, prev.upperY, (prev.upperX + current.upperX) * 0.5, (prev.upperY + current.upperY) * 0.5);
         }
         const last = contacts[contacts.length - 1];
-        path.lineTo(last.lowerX, last.lowerY);
+        if (options.liveHead) {
+          const headReach = Math.max(1, last.length * clamp(options.headReach ?? 0.2, 0.04, 0.45));
+          const head = {
+            x: last.x + last.headingX * headReach,
+            y: last.y + last.headingY * headReach,
+          };
+          path.quadraticCurveTo(head.x, head.y, last.lowerX, last.lowerY);
+        } else {
+          path.lineTo(last.lowerX, last.lowerY);
+        }
         for (let i = contacts.length - 2; i >= 0; i -= 1) {
           const next = contacts[i + 1];
           const current = contacts[i];
@@ -6431,7 +6440,7 @@
         coverage.globalAlpha = 1;
         coverage.globalCompositeOperation = "source-over";
         const contacts = buildSweptWriterContacts(spec, frame, progress);
-        fillSweptBody(coverage, contacts);
+        fillSweptBody(coverage, contacts, { liveHead: progress < 0.96, headReach: 0.18 });
         for (let i = 0; i < contacts.length; i += 1) {
           if (i === 0 || (i === contacts.length - 1 && progress > 0.96)) {
             coverage.fill(makeSweptContactPath(contacts[i]));
@@ -6444,23 +6453,26 @@
         ink.drawImage(coverageCanvas, 0, 0);
         ink.restore();
 
-        overlay.save();
-        overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
-        overlay.lineWidth = 1;
-        overlay.strokeRect(frame.x, frame.y, (frame.viewWidth ?? spec.imageSize[0]) * frame.scale, (frame.viewHeight ?? spec.imageSize[1]) * frame.scale);
-        overlay.strokeStyle = "rgba(190, 86, 32, 0.38)";
-        overlay.lineWidth = 1.25;
-        overlay.beginPath();
-        const transformed = spec.centerline.map((point) => transformSweptStrokePoint(point, frame));
-        transformed.forEach((point, index) => {
-          if (index === 0) overlay.moveTo(point.x, point.y);
-          else overlay.lineTo(point.x, point.y);
-        });
-        overlay.stroke();
-        overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
-        overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        overlay.fillText(`${strokeName} swept-contact progress ${progress.toFixed(2)}`, frame.x + 8, frame.y + 18);
-        overlay.restore();
+        const showGuide = options.guide === true || new URLSearchParams(window.location.search).get("guide") === "1";
+        if (showGuide) {
+          overlay.save();
+          overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
+          overlay.lineWidth = 1;
+          overlay.strokeRect(frame.x, frame.y, (frame.viewWidth ?? spec.imageSize[0]) * frame.scale, (frame.viewHeight ?? spec.imageSize[1]) * frame.scale);
+          overlay.strokeStyle = "rgba(190, 86, 32, 0.38)";
+          overlay.lineWidth = 1.25;
+          overlay.beginPath();
+          const transformed = spec.centerline.map((point) => transformSweptStrokePoint(point, frame));
+          transformed.forEach((point, index) => {
+            if (index === 0) overlay.moveTo(point.x, point.y);
+            else overlay.lineTo(point.x, point.y);
+          });
+          overlay.stroke();
+          overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
+          overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+          overlay.fillText(`${strokeName} swept-contact progress ${progress.toFixed(2)}`, frame.x + 8, frame.y + 18);
+          overlay.restore();
+        }
         if (contacts.length) {
           const last = contacts[contacts.length - 1];
           brush.width = last.half * 2;
