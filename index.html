@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.15</h2>
+          <h2>BiMo Contact Patch v10.16</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6321,7 +6321,7 @@
         const sy = scale * 2.0;
         const cx = rect.width * 0.5;
         const cy = rect.height * 0.36;
-        const p = (x, y) => ({ x: cx + (x + 30) * sx, y: cy + (y + 9) * sy });
+        const p = (x, y) => ({ x: cx + (x + 30) * sx + 2, y: cy + (y + 9) * sy + 3 });
         const showConstruction = new URLSearchParams(window.location.search).get("construction") === "1";
         const strokes = showConstruction ? [
           makeDemoTopDot(
