@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.45</h2>
+          <h2>BiMo Contact Patch v10.46</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6287,6 +6287,34 @@
         ink.restore();
       }
 
+      const yongVideoTracePolys = [
+        [[45.6,-60.7],[29.2,-55.1],[-21.8,-49.5],[-5.4,-40.1],[6.1,-40.1],[37.4,-48.6],[45.6,-47.6],[32.5,60.7],[27.5,65.4],[22.6,65.4],[-3.7,57.0],[-5.4,57.9],[20.9,74.7],[29.2,83.1],[37.4,83.1],[62.1,64.4],[62.1,38.3],[58.8,21.5],[60.4,-1.9],[80.2,15.9],[116.3,41.1],[150.9,57.9],[160.7,58.8],[180.5,53.2],[203.5,49.5],[175.5,42.9],[139.4,30.8],[86.7,2.8],[60.4,-18.7],[60.4,-26.1],[67.0,-41.1],[76.9,-45.7],[78.5,-50.4],[60.4,-57.9]],
+        [[17.7,-13.1],[2.9,-19.6],[-8.7,-21.5],[-25.1,-16.8],[-64.6,-13.1],[-86.0,-13.1],[-90.9,-11.2],[-69.5,-0.9],[-61.3,-0.9],[-16.9,-10.3],[-13.6,-7.5],[-39.9,16.8],[-61.3,32.7],[-94.2,53.2],[-100.8,54.2],[-100.8,56.0],[-87.6,54.2],[-28.4,25.2],[-8.7,11.2],[1.2,0.0],[19.3,-8.4]],
+        [[24.2,-100.8],[42.3,-86.8],[42.3,-84.0],[22.6,-71.0],[24.2,-70.0],[40.7,-75.6],[53.8,-75.6],[67.0,-72.8],[76.9,-72.8],[85.1,-75.6],[80.2,-85.9],[63.7,-94.3],[50.6,-98.0]],
+        [[150.9,-40.1],[132.8,-49.5],[129.5,-47.6],[131.1,-41.1],[83.4,-12.1],[150.9,-34.5]],
+      ];
+
+      function drawYongReferenceVideoTraceFace(p) {
+        const face = new Path2D();
+        for (const poly of yongVideoTracePolys) {
+          const first = p(poly[0][0], poly[0][1]);
+          face.moveTo(first.x, first.y);
+          for (let i = 1; i < poly.length; i += 1) {
+            const point = p(poly[i][0], poly[i][1]);
+            face.lineTo(point.x, point.y);
+          }
+          face.closePath();
+        }
+        ink.save();
+        ink.fillStyle = "#111411";
+        ink.globalCompositeOperation = "source-over";
+        ink.filter = demoInkMode ? "blur(0.01px)" : "none";
+        ink.globalAlpha = 0.98;
+        ink.fill(face);
+        ink.filter = "none";
+        ink.restore();
+      }
+
       function drawYongReferenceTopDotFace(p) {
         const face = new Path2D();
         face.moveTo(p(33, -91).x, p(33, -91).y);
@@ -6650,13 +6678,17 @@
         if (showConstruction) {
           for (const stroke of strokesToDraw) drawDemoStroke(stroke);
         }
-        if (strokeIndex === -1 || strokeIndex === 0) drawYongReferenceTopDotFace(p);
-        if (strokeIndex === -1 || strokeIndex === 1) drawYongReferenceHengShuGouOneStroke(p);
-        if (strokeIndex === -1 || strokeIndex === 2) drawYongReferencePieFace(p);
-        if (strokeIndex === -1 || strokeIndex === 3) drawYongReferenceSideDotFace(p);
-        if (strokeIndex === -1 || strokeIndex === 4) {
-          drawYongReferenceNaiFace(p);
-          if (showConstruction) trimYongNaiTailHaze(p);
+        if (!showConstruction && strokeIndex === -1) {
+          drawYongReferenceVideoTraceFace(p);
+        } else {
+          if (strokeIndex === -1 || strokeIndex === 0) drawYongReferenceTopDotFace(p);
+          if (strokeIndex === -1 || strokeIndex === 1) drawYongReferenceHengShuGouOneStroke(p);
+          if (strokeIndex === -1 || strokeIndex === 2) drawYongReferencePieFace(p);
+          if (strokeIndex === -1 || strokeIndex === 3) drawYongReferenceSideDotFace(p);
+          if (strokeIndex === -1 || strokeIndex === 4) {
+            drawYongReferenceNaiFace(p);
+            if (showConstruction) trimYongNaiTailHaze(p);
+          }
         }
         softenDemoInk();
         singleFaceInkMode = false;
