@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.51</h2>
+          <h2>BiMo Contact Patch v10.52</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6004,9 +6004,10 @@
         return samples;
       }
 
-      function drawWriterSpecStroke(specName) {
+      function drawWriterSpecStroke(specName, options = {}) {
         const spec = WRITER_STROKE_SPECS[specName];
         if (!spec) return false;
+        const visibleProgress = clamp(options.progress ?? 1, 0.02, 1);
         const rect = stage.getBoundingClientRect();
         const targetSize = Math.min(rect.width * 0.78, rect.height * 0.78, 560);
         const frame = {
@@ -6015,7 +6016,20 @@
           y: rect.height * 0.47 - (spec.imageSize[1] * targetSize) / Math.max(spec.imageSize[0], spec.imageSize[1]) / 2,
         };
         const transformed = spec.centerline.map((point) => transformWriterSpecPoint(spec, point, frame));
-        const samples = interpolateWriterSpecPoints(transformed, 12);
+        const allSamples = interpolateWriterSpecPoints(transformed, 12);
+        const visibleCount = Math.max(2, Math.min(allSamples.length, Math.round(1 + (allSamples.length - 1) * visibleProgress)));
+        const samples = allSamples.slice(0, visibleCount);
+        if (visibleProgress < 1 && visibleCount < allSamples.length) {
+          const prev = allSamples[visibleCount - 1];
+          const next = allSamples[visibleCount];
+          const exactIndex = (allSamples.length - 1) * visibleProgress;
+          const local = clamp(exactIndex - Math.floor(exactIndex), 0, 1);
+          samples[samples.length - 1] = {
+            x: lerp(prev.x, next.x, local),
+            y: lerp(prev.y, next.y, local),
+            width: lerp(prev.width, next.width, local),
+          };
+        }
         const upper = [];
         const lower = [];
         for (let i = 0; i < samples.length; i += 1) {
@@ -6026,10 +6040,12 @@
           const perpX = -tangent.y;
           const perpY = tangent.x;
           const progress = i / Math.max(1, samples.length - 1);
-          const lift = 1 - smoothstep(0.72, 1, progress) * 0.38;
+          const wholeProgress = (i / Math.max(1, samples.length - 1)) * visibleProgress;
+          const lift = 1 - smoothstep(0.72, 1, wholeProgress) * 0.38;
+          const liveTipLift = visibleProgress < 1 && i === samples.length - 1 ? 0.54 : 1;
           const half = Math.max(0.7, samples[i].width * 0.5 * lift);
-          const upperHalf = half * (spec.type === "nai" ? 0.72 : 0.82);
-          const lowerHalf = half * (spec.type === "nai" ? 1.18 : 1.08);
+          const upperHalf = half * liveTipLift * (spec.type === "nai" ? 0.72 : 0.82);
+          const lowerHalf = half * liveTipLift * (spec.type === "nai" ? 1.18 : 1.08);
           upper.push({ x: current.x + perpX * upperHalf, y: current.y + perpY * upperHalf });
           lower.push({ x: current.x - perpX * lowerHalf, y: current.y - perpY * lowerHalf });
         }
@@ -6074,9 +6090,33 @@
         overlay.strokeRect(frame.x, frame.y, spec.imageSize[0] * frame.scale, spec.imageSize[1] * frame.scale);
         overlay.fillStyle = "rgba(35, 28, 20, 0.72)";
         overlay.font = "12px ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
-        overlay.fillText(`${specName} IoU ${spec.metrics.iou}`, frame.x + 8, frame.y + 18);
+        overlay.fillText(`${specName} IoU ${spec.metrics.iou} progress ${visibleProgress.toFixed(2)}`, frame.x + 8, frame.y + 18);
         overlay.restore();
         return true;
+      }
+
+      function renderWriterSpecFrame(specName, progress) {
+        clearInk();
+        const canvasRect = stage.getBoundingClientRect();
+        overlay.clearRect(0, 0, canvasRect.width, canvasRect.height);
+        demoInkMode = true;
+        singleFaceInkMode = false;
+        const rendered = drawWriterSpecStroke(specName, { progress });
+        if (rendered) softenDemoInk();
+        demoInkMode = false;
+        updateHud();
+        return rendered;
+      }
+
+      function animateWriterSpecStroke(specName, duration = 1800) {
+        const start = performance.now();
+        const frame = (now) => {
+          const elapsed = now - start;
+          const progress = clamp(elapsed / duration, 0.02, 1);
+          if (!renderWriterSpecFrame(specName, progress)) return;
+          if (progress < 1) requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
       }
 
       function buildRightNaiStroke(p, useWriter = false) {
@@ -6610,15 +6650,13 @@
         const yongParams = new URLSearchParams(window.location.search);
         const writerSpecParam = yongParams.get("writerSpec");
         if (writerSpecParam) {
-          const canvasRect = stage.getBoundingClientRect();
-          overlay.clearRect(0, 0, canvasRect.width, canvasRect.height);
-          demoInkMode = true;
-          singleFaceInkMode = false;
-          if (drawWriterSpecStroke(writerSpecParam)) {
-            softenDemoInk();
+          const progressParam = Number(yongParams.get("progress"));
+          const writerProgress = Number.isFinite(progressParam) ? clamp(progressParam, 0.02, 1) : 1;
+          if (yongParams.get("animate") === "1") {
+            animateWriterSpecStroke(writerSpecParam, 1800);
+          } else {
+            renderWriterSpecFrame(writerSpecParam, writerProgress);
           }
-          demoInkMode = false;
-          updateHud();
           return;
         }
         const showConstruction = yongParams.get("construction") === "1";
