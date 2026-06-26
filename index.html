@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.28</h2>
+          <h2>BiMo Contact Patch v10.29</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6000,26 +6000,23 @@
       }
 
       function drawYongReferenceNaiFace(p) {
-        const body = drawYongOneStrokeBand(
-          p,
-          [
-            { x: 24, y: -7, left: 5.472, right: 11.077, dirX: 0.76, dirY: 0.62 },
-            { x: 37.05, y: 6.71, left: 8.208, right: 17.002 },
-            { x: 58.38, y: 23.43, left: 10.488, right: 22.968 },
-            { x: 82.7, y: 37.14, left: 12.084, right: 27.456 },
-            { x: 112.03, y: 46.86, left: 10.3981, right: 24.60329 },
-            { x: 144.35, y: 51.57, left: 8.30767, right: 18.25221 },
-            { x: 175.68, y: 52.29, left: 5.59968, right: 11.5239 },
-            { x: 198, y: 55, left: 2.61744, right: 6.1254, dirX: 1, dirY: 0.08 },
-          ],
-          { alpha: 0.97, blur: 0.01 },
-        );
-        if (!body) return;
-        drawYongClippedEdgeNicks(body, p, [
-          { start: [83, 58], end: [91, 52], alpha: 0, width: 0.16 },
-          { start: [116, 64], end: [124, 57], alpha: 0, width: 0.16 },
-          { start: [151, 63], end: [161, 55], alpha: 0, width: 0.12 },
-        ]);
+        const face = new Path2D();
+        face.moveTo(p(22, -10).x, p(22, -10).y);
+        face.bezierCurveTo(p(40, -1).x, p(40, -1).y, p(65, 15).x, p(65, 15).y, p(92, 31).x, p(92, 31).y);
+        face.bezierCurveTo(p(120, 45).x, p(120, 45).y, p(153, 49).x, p(153, 49).y, p(168, 48).x, p(168, 48).y);
+        face.lineTo(p(184, 45).x, p(184, 45).y);
+        face.lineTo(p(166, 61).x, p(166, 61).y);
+        face.bezierCurveTo(p(132, 66).x, p(132, 66).y, p(96, 56).x, p(96, 56).y, p(70, 40).x, p(70, 40).y);
+        face.bezierCurveTo(p(53, 27).x, p(53, 27).y, p(38, 8).x, p(38, 8).y, p(22, -10).x, p(22, -10).y);
+        face.closePath();
+        ink.save();
+        ink.fillStyle = "#111411";
+        ink.globalCompositeOperation = "source-over";
+        ink.filter = demoInkMode ? "blur(0.01px)" : "none";
+        ink.globalAlpha = 0.97;
+        ink.fill(face);
+        ink.filter = "none";
+        ink.restore();
       }
 
       function trimYongNaiTailHaze(p) {
