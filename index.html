@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.29</h2>
+          <h2>BiMo Contact Patch v10.30</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6269,24 +6269,22 @@
       }
 
       function drawYongReferenceSideDotFace(p) {
-        const q = (x, y) => p(72 + (x - 72) * 1.12 + 0, -22 + (y + 22) * 1.02 - 10);
-        const body = drawYongOneStrokeBand(
-          q,
-          [
-            { x: 47, y: -8.5, left: 1.38, right: 3.036, dirX: 1, dirY: -0.62 },
-            { x: 57.5, y: -16.3, left: 4.14, right: 6.256 },
-            { x: 70, y: -26.5, left: 6.9026, right: 10.0975 },
-            { x: 84, y: -35.5, left: 6.3874, right: 11.125 },
-            { x: 98, y: -47.5, left: 3.68, right: 6.992 },
-            { x: 107, y: -39, left: 1.472, right: 3.496, dirX: 1, dirY: 0.18 },
-          ],
-          { alpha: 0.96, blur: 0.01 },
-        );
-        if (!body) return;
-        drawYongClippedEdgeNicks(body, q, [
-          { start: [56, -12], end: [62, -19], alpha: 0, width: 0.16 },
-          { start: [86, -34], end: [80, -31], alpha: 0, width: 0.12 },
-        ]);
+        const face = new Path2D();
+        face.moveTo(p(43, -8).x, p(43, -8).y);
+        face.bezierCurveTo(p(55, -15).x, p(55, -15).y, p(72, -25).x, p(72, -25).y, p(92, -35).x, p(92, -35).y);
+        face.lineTo(p(104, -32).x, p(104, -32).y);
+        face.bezierCurveTo(p(99, -43).x, p(99, -43).y, p(85, -47).x, p(85, -47).y, p(70, -39).x, p(70, -39).y);
+        face.lineTo(p(61, -33).x, p(61, -33).y);
+        face.bezierCurveTo(p(54, -24).x, p(54, -24).y, p(48, -16).x, p(48, -16).y, p(43, -8).x, p(43, -8).y);
+        face.closePath();
+        ink.save();
+        ink.fillStyle = "#111411";
+        ink.globalCompositeOperation = "source-over";
+        ink.filter = demoInkMode ? "blur(0.01px)" : "none";
+        ink.globalAlpha = 0.96;
+        ink.fill(face);
+        ink.filter = "none";
+        ink.restore();
       }
 
       function drawYongReferenceTopDotFace(p) {
