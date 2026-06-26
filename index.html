@@ -428,7 +428,7 @@
 
       <aside class="panel">
         <header>
-          <h2>BiMo Contact Patch v10.47</h2>
+          <h2>BiMo Contact Patch v10.48</h2>
           <p class="sub">用 Apple Pencil 直接在纸面区域写。非 Pencil 输入会使用模拟压力。</p>
         </header>
 
@@ -6294,24 +6294,69 @@
         [[150.9,-38.1],[132.8,-47.5],[129.5,-45.6],[131.1,-39.1],[83.4,-10.1],[150.9,-32.5]],
       ];
 
-      function drawYongReferenceVideoTraceFace(p) {
-        const face = new Path2D();
-        for (const poly of yongVideoTracePolys) {
+      function buildYongTracePath(p, polys) {
+        const path = new Path2D();
+        for (const poly of polys) {
           const first = p(poly[0][0], poly[0][1]);
-          face.moveTo(first.x, first.y);
+          path.moveTo(first.x, first.y);
           for (let i = 1; i < poly.length; i += 1) {
             const point = p(poly[i][0], poly[i][1]);
-            face.lineTo(point.x, point.y);
+            path.lineTo(point.x, point.y);
           }
-          face.closePath();
+          path.closePath();
         }
+        return path;
+      }
+
+      function buildYongTraceClipPath(p, poly) {
+        const clip = new Path2D();
+        const first = p(poly[0][0], poly[0][1]);
+        clip.moveTo(first.x, first.y);
+        for (let i = 1; i < poly.length; i += 1) {
+          const point = p(poly[i][0], poly[i][1]);
+          clip.lineTo(point.x, point.y);
+        }
+        clip.closePath();
+        return clip;
+      }
+
+      function fillYongTracePath(path, alpha = 0.98) {
         ink.save();
         ink.fillStyle = "#111411";
         ink.globalCompositeOperation = "source-over";
         ink.filter = demoInkMode ? "blur(0.01px)" : "none";
-        ink.globalAlpha = 0.98;
-        ink.fill(face);
+        ink.globalAlpha = alpha;
+        ink.fill(path);
         ink.filter = "none";
+        ink.restore();
+      }
+
+      function drawYongReferenceVideoTraceFace(p) {
+        fillYongTracePath(buildYongTracePath(p, yongVideoTracePolys));
+      }
+
+      function drawYongReferenceVideoTraceStroke(p, strokeIndex) {
+        const mainPath = buildYongTracePath(p, [yongVideoTracePolys[0]]);
+        if (strokeIndex === 0) {
+          fillYongTracePath(buildYongTracePath(p, [yongVideoTracePolys[2]]), 0.98);
+          return;
+        }
+        if (strokeIndex === 2) {
+          fillYongTracePath(buildYongTracePath(p, [yongVideoTracePolys[1]]), 0.98);
+          return;
+        }
+        if (strokeIndex === 3) {
+          fillYongTracePath(buildYongTracePath(p, [yongVideoTracePolys[3]]), 0.98);
+          return;
+        }
+
+        const clipPoly =
+          strokeIndex === 1
+            ? [[-42, -74], [82, -74], [82, 6], [65, 20], [68, 75], [44, 92], [-18, 92], [-18, 48], [36, 48], [38, -34], [-42, -34]]
+            : [[54, -26], [220, 24], [220, 80], [150, 80], [94, 50], [58, 20], [50, 0]];
+        ink.save();
+        ink.clip(buildYongTraceClipPath(p, clipPoly));
+        fillYongTracePath(mainPath, 0.98);
         ink.restore();
       }
 
@@ -6680,6 +6725,8 @@
         }
         if (!showConstruction && strokeIndex === -1) {
           drawYongReferenceVideoTraceFace(p);
+        } else if (!showConstruction && Number.isInteger(strokeIndex) && strokeIndex >= 0 && strokeIndex <= 4) {
+          drawYongReferenceVideoTraceStroke(p, strokeIndex);
         } else {
           if (strokeIndex === -1 || strokeIndex === 0) drawYongReferenceTopDotFace(p);
           if (strokeIndex === -1 || strokeIndex === 1) drawYongReferenceHengShuGouOneStroke(p);
