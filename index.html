@@ -6247,6 +6247,72 @@
           lengthScale: 1.142,
           samples: 96,
         },
+        heng_shu_gou_v1: {
+          id: "heng_shu_gou",
+          type: "heng_shu_gou",
+          imageSize: [150, 190],
+          viewBox: [0, 0, 150, 190],
+          source: "tuned by work/tune_heng_shu_gou_swept_v1.py against bimo_video_hsg accumulated mask",
+          centerline: [
+            { x: 32.99, y: 35.44 },
+            { x: 27.35, y: 42 },
+            { x: 106, y: 21.01 },
+            { x: 129.43, y: 31.61 },
+            { x: 126.32, y: 55.24 },
+            { x: 81.24, y: 64.52 },
+            { x: 81.24, y: 115.37 },
+            { x: 82.24, y: 138.13 },
+            { x: 63.06, y: 174.26 },
+            { x: 27.28, y: 168.26 },
+            { x: 12.37, y: 158 },
+          ],
+          pressureStops: [
+            [0, 0.13795205095794338],
+            [0.12, 0.6130898100412018],
+            [0.32, 0.78],
+            [0.42, 0.9051805918223168],
+            [0.7, 0.8737060030647633],
+            [0.82, 0.5146180238715612],
+            [0.92, 0.44965494194737904],
+            [1, 0.024973393575458285],
+          ],
+          headingStops: [
+            [0, -0.08],
+            [0.28, 0.02],
+            [0.4, -0.42],
+            [0.76, -0.12],
+            [0.88, 0.36],
+            [1, 0.1],
+          ],
+          dragStops: [
+            [0, 1.678118950880858],
+            [0.32, 4.4435197024521385],
+            [0.44, 6.78365139238403],
+            [0.76, 1.4594882135575664],
+            [0.88, 2.666751427035373],
+            [1, 0.8942633320396289],
+          ],
+          upperStops: [
+            [0, 0.8645871403215405],
+            [0.28, 0.7892157095861617],
+            [0.4, 1.2375354795231694],
+            [0.74, 0.34856930693347987],
+            [0.88, 1.2065625398446453],
+            [1, 0.12871587750429192],
+          ],
+          lowerStops: [
+            [0, 0.5356570763222385],
+            [0.28, 1.6],
+            [0.4, 1.4299395825523848],
+            [0.74, 0.7689022779399493],
+            [0.88, 0.7380751091707811],
+            [1, 0.041498484012524185],
+          ],
+          baseWidth: 3.739,
+          maxWidth: 37.94,
+          lengthScale: 1.529,
+          samples: 132,
+        },
       };
 
       function catmullRomPoint(points, t) {
@@ -6475,8 +6541,8 @@
         }
         if (contacts.length) {
           const last = contacts[contacts.length - 1];
-          brush.width = last.half * 2;
-          brush.length = last.length;
+          brush.width = Math.max(0.5, finite(last.half, finite(brush.width, 4)) * 2);
+          brush.length = Math.max(1.4, finite(last.length, finite(brush.length, 4)));
           brush.pressure = last.pressure;
           brush.speed = 0;
         }
@@ -7777,54 +7843,75 @@
 
       function settleBrush(target) {
         const response = clamp(1 - settings.lag, 0.08, 0.76);
-        const shapeResponse = target.wedge < 0.08 ? Math.max(response, 0.72) : response;
+        const targetWidth = finite(target.width, 4);
+        const targetLength = finite(target.length, 4);
+        const targetWedge = finite(target.wedge, 0);
+        const targetPointed = finite(target.pointed, 0);
+        const targetBelly = finite(target.belly, 0);
+        const targetFan = finite(target.fan, 0);
+        const targetHeel = finite(target.heelOffset, 0);
+        const targetBendX = finite(target.bendX, 0);
+        const targetBendY = finite(target.bendY, 0);
+        const targetBendAmount = finite(target.bendAmount, 0);
+        const targetRootLoad = finite(target.rootLoad, 0);
+        const targetSlip = finite(target.slip, 0);
+        const targetPressure = finite(target.pressure, 0);
+        const targetSpeed = finite(target.speed, 0);
+        const targetTiltX = finite(target.tiltX, brush.tiltX);
+        const targetTiltY = finite(target.tiltY, brush.tiltY);
+        const targetTwist = finite(target.twist, brush.twist);
+        const targetInkScale = finite(target.inkScale, brush.inkScale);
+        const targetStampBias = finite(target.stampBias, 0);
+        const targetCapBias = finite(target.capBias, 0);
+        const targetCornerBias = finite(target.cornerBias, 0);
+        const shapeResponse = targetWedge < 0.08 ? Math.max(response, 0.72) : response;
         const dir = normalize(
-          lerp(brush.dirX, target.dirX, response * 0.72),
-          lerp(brush.dirY, target.dirY, response * 0.72),
+          lerp(finite(brush.dirX, 0), finite(target.dirX, 0), response * 0.72),
+          lerp(finite(brush.dirY, -1), finite(target.dirY, -1), response * 0.72),
           target.dirX,
           target.dirY,
         );
         brush.dirX = dir.x;
         brush.dirY = dir.y;
-        brush.width = lerp(brush.width, target.width, response);
-        brush.length = lerp(brush.length, target.length, response);
-        brush.wedge = lerp(brush.wedge, target.wedge, shapeResponse);
-        brush.pointed = lerp(brush.pointed || 0, target.pointed || 0, shapeResponse);
-        brush.belly = lerp(brush.belly || 0, target.belly || 0, response);
-        brush.fan = lerp(brush.fan || 0, target.fan || 0, response);
-        brush.heelOffset = lerp(brush.heelOffset || 0, target.heelOffset || 0, response);
-        brush.bendX = lerp(brush.bendX || 0, target.bendX || 0, response);
-        brush.bendY = lerp(brush.bendY || 0, target.bendY || 0, response);
-        brush.bendAmount = lerp(brush.bendAmount || 0, target.bendAmount || 0, response);
-        brush.rootLoad = lerp(brush.rootLoad || 0, target.rootLoad || 0, response);
-        brush.slip = lerp(brush.slip || 0, target.slip || 0, response);
-        brush.pressure = target.pressure;
-        brush.speed = target.speed;
-        brush.tiltX = target.tiltX;
-        brush.tiltY = target.tiltY;
-        brush.twist = target.twist;
-        brush.inkScale = target.inkScale ?? 1;
-        brush.stampBias = target.stampBias ?? 0;
-        brush.capBias = target.capBias ?? 0;
-        brush.cornerBias = target.cornerBias ?? 0;
+        brush.width = clamp(lerp(finite(brush.width, 4), targetWidth, response), 0.5, settings.size * 1.75);
+        brush.length = clamp(lerp(finite(brush.length, 4), targetLength, response), 1.4, settings.size * 2.55);
+        brush.wedge = clamp(lerp(finite(brush.wedge, 0), targetWedge, shapeResponse), 0, 1);
+        brush.pointed = clamp(lerp(finite(brush.pointed, 0), targetPointed, shapeResponse), 0, 1);
+        brush.belly = clamp(lerp(finite(brush.belly, 0), targetBelly, response), 0, 1);
+        brush.fan = clamp(lerp(finite(brush.fan, 0), targetFan, response), 0, 1);
+        brush.heelOffset = clamp(lerp(finite(brush.heelOffset, 0), targetHeel, response), 0, 1);
+        brush.bendX = lerp(finite(brush.bendX, 0), targetBendX, response);
+        brush.bendY = lerp(finite(brush.bendY, 0), targetBendY, response);
+        brush.bendAmount = clamp(lerp(finite(brush.bendAmount, 0), targetBendAmount, response), 0, 1);
+        brush.rootLoad = clamp(lerp(finite(brush.rootLoad, 0), targetRootLoad, response), 0, 1);
+        brush.slip = clamp(lerp(finite(brush.slip, 0), targetSlip, response), 0, 1);
+        brush.pressure = clamp(targetPressure, 0, 1);
+        brush.speed = Math.max(0, targetSpeed);
+        brush.tiltX = targetTiltX;
+        brush.tiltY = targetTiltY;
+        brush.twist = targetTwist;
+        brush.inkScale = clamp(targetInkScale, 0, 1);
+        brush.stampBias = clamp(targetStampBias, 0, 1);
+        brush.capBias = clamp(targetCapBias, 0, 1);
+        brush.cornerBias = clamp(targetCornerBias, 0, 1);
         brush.pointerType = target.pointerType;
       }
 
       function contactPath(x, y, model, scale = 1, offset = 0) {
-        const dirX = model.dirX;
-        const dirY = model.dirY;
+        const dirX = finite(model.dirX, 0);
+        const dirY = finite(model.dirY, -1);
         const perpX = -dirY;
         const perpY = dirX;
-        const width = model.width * scale;
-        const length = model.length * scale;
-        const wedge = Math.max(model.wedge, (model.cornerBias || 0) * 0.55);
-        const pointed = clamp(model.pointed || 0, 0, 1);
-        const fan = clamp(model.fan || 0, 0, 1);
-        const rootLoad = clamp(model.rootLoad || 0, 0, 1);
-        const slip = clamp(model.slip || 0, 0, 1);
-        const bendAmount = clamp(model.bendAmount || 0, 0, 1);
-        const bendX = (model.bendX || 0) * width * bendAmount;
-        const bendY = (model.bendY || 0) * width * bendAmount;
+        const width = Math.max(0.5, finite(model.width, 4) * scale);
+        const length = Math.max(1.4, finite(model.length, 4) * scale);
+        const wedge = Math.max(clamp(finite(model.wedge, 0), 0, 1), clamp(finite(model.cornerBias, 0), 0, 1) * 0.55);
+        const pointed = clamp(finite(model.pointed, 0), 0, 1);
+        const fan = clamp(finite(model.fan, 0), 0, 1);
+        const rootLoad = clamp(finite(model.rootLoad, 0), 0, 1);
+        const slip = clamp(finite(model.slip, 0), 0, 1);
+        const bendAmount = clamp(finite(model.bendAmount, 0), 0, 1);
+        const bendX = finite(model.bendX, 0) * width * bendAmount;
+        const bendY = finite(model.bendY, 0) * width * bendAmount;
         const cx = x + perpX * offset;
         const cy = y + perpY * offset;
 
@@ -7996,9 +8083,11 @@
       }
 
       function contactCenter(x, y, model) {
-        const heel = clamp(model.heelOffset || 0, 0, 0.4);
-        const back = model.length * heel;
-        return { x: x - model.dirX * back, y: y - model.dirY * back };
+        const heel = clamp(finite(model.heelOffset, 0), 0, 0.4);
+        const back = finite(model.length, 4) * heel;
+        const dirX = finite(model.dirX, 0);
+        const dirY = finite(model.dirY, -1);
+        return { x: x - dirX * back, y: y - dirY * back };
       }
 
       function drawBellyWash(ctx, from, to, model, alpha, dir, perpX, perpY, fromHalf, toHalf) {
@@ -8447,19 +8536,19 @@
         if (!settings.showPatch || !brush.drawing || x === null || y === null) return;
 
         const model = {
-          dirX: brush.dirX,
-          dirY: brush.dirY,
-          width: brush.width,
-          length: brush.length,
-          wedge: brush.wedge,
-          pointed: brush.pointed,
-          fan: brush.fan,
-          heelOffset: brush.heelOffset,
-          bendX: brush.bendX,
-          bendY: brush.bendY,
-          bendAmount: brush.bendAmount,
-          rootLoad: brush.rootLoad,
-          slip: brush.slip,
+          dirX: finite(brush.dirX, 0),
+          dirY: finite(brush.dirY, -1),
+          width: finite(brush.width, 4),
+          length: finite(brush.length, 4),
+          wedge: finite(brush.wedge, 0),
+          pointed: finite(brush.pointed, 0),
+          fan: finite(brush.fan, 0),
+          heelOffset: finite(brush.heelOffset, 0),
+          bendX: finite(brush.bendX, 0),
+          bendY: finite(brush.bendY, 0),
+          bendAmount: finite(brush.bendAmount, 0),
+          rootLoad: finite(brush.rootLoad, 0),
+          slip: finite(brush.slip, 0),
         };
         const center = contactCenter(x, y, model);
         const path = contactPath(center.x, center.y, model);
@@ -8472,8 +8561,8 @@
         overlay.strokeStyle = "rgba(40, 32, 20, 0.5)";
         overlay.lineWidth = 1;
         overlay.beginPath();
-        overlay.moveTo(x - brush.dirX * brush.length * 0.66, y - brush.dirY * brush.length * 0.66);
-        overlay.lineTo(x + brush.dirX * brush.length * 0.46, y + brush.dirY * brush.length * 0.46);
+        overlay.moveTo(x - model.dirX * model.length * 0.66, y - model.dirY * model.length * 0.66);
+        overlay.lineTo(x + model.dirX * model.length * 0.46, y + model.dirY * model.length * 0.46);
         overlay.stroke();
         overlay.fillStyle = "rgba(30, 24, 16, 0.62)";
         overlay.beginPath();
@@ -8483,14 +8572,22 @@
       }
 
       function updateHud() {
-        outputs.hudPressure.textContent = brush.pressure.toFixed(2);
-        outputs.hudSpeed.textContent = Math.round(brush.speed * 1000).toString();
-        outputs.hudWidth.textContent = `${Math.round(brush.width)}px`;
-        outputs.hudLength.textContent = `${Math.round(brush.length)}px`;
-        outputs.logPointer.textContent = brush.pointerType;
-        outputs.logTilt.textContent = `${Math.round(brush.tiltX)} / ${Math.round(brush.tiltY)}`;
-        outputs.logTwist.textContent = Math.round(brush.twist).toString();
-        outputs.logSamples.textContent = brush.sampleCount.toString();
+        const safePressure = clamp(finite(brush.pressure, 0), 0, 1);
+        const safeSpeed = Math.max(0, finite(brush.speed, 0));
+        const safeWidth = clamp(finite(brush.width, 4), 0.5, 2048);
+        const safeLength = clamp(finite(brush.length, 4), 0.5, 2048);
+        const safeTiltX = finite(brush.tiltX, 0);
+        const safeTiltY = finite(brush.tiltY, 0);
+        const safeTwist = finite(brush.twist, 0);
+        const safeSampleCount = Math.max(0, finite(brush.sampleCount, 0));
+        outputs.hudPressure.textContent = safePressure.toFixed(2);
+        outputs.hudSpeed.textContent = Math.round(safeSpeed * 1000).toString();
+        outputs.hudWidth.textContent = `${Math.round(safeWidth)}px`;
+        outputs.hudLength.textContent = `${Math.round(safeLength)}px`;
+        outputs.logPointer.textContent = String(brush.pointerType ?? "-");
+        outputs.logTilt.textContent = `${Math.round(safeTiltX)} / ${Math.round(safeTiltY)}`;
+        outputs.logTwist.textContent = Math.round(safeTwist).toString();
+        outputs.logSamples.textContent = safeSampleCount.toString();
       }
 
       function smoothLivePenSample(sample) {
@@ -8522,10 +8619,10 @@
         if (!brush.last) {
           brush.last = sample;
           const target = targetShape(sample, null);
-          brush.dirX = target.dirX;
-          brush.dirY = target.dirY;
-          brush.width = target.width;
-          brush.length = target.length;
+          brush.dirX = finite(target.dirX, 0);
+          brush.dirY = finite(target.dirY, -1);
+          brush.width = finite(target.width, 4);
+          brush.length = finite(target.length, 4);
           brush.wedge = target.wedge;
           settleBrush(target);
           drawFootprint(ink, sample.x, sample.y, brush);
@@ -8583,13 +8680,17 @@
           const target = targetShape(point, brush.last);
           settleBrush(target);
           const stepDistance = brush.inkPoint ? hypot(point.x - brush.inkPoint.x, point.y - brush.inkPoint.y) : 0;
+          const bridgeDistanceFloor = Math.max(0.45, brush.width * 0.045);
+          const bridgeDrawGate = brush.inkPoint && stepDistance < bridgeDistanceFloor && brush.speed < 0.01;
           const stationaryContact = brush.speed < 0.006 && stepDistance < Math.max(1.2, brush.width * 0.035);
           const pressureBloom =
             stationaryContact &&
             brush.inkScale > 0.35 &&
             (brush.last.inkScale ?? 1) > 0.35 &&
             Math.abs(point.pressure - brush.last.pressure) > 0.035;
-          drawWetBridge(ink, brush.inkPoint, point, brush);
+          if (!bridgeDrawGate) {
+            drawWetBridge(ink, brush.inkPoint, point, brush);
+          }
           brush.stampTravel += stepDistance;
           const footprintGap = clamp(brush.width * lerp(0.58, 0.96, brush.pointed), 12, 30);
           const stampFootprint =
