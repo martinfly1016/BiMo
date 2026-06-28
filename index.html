@@ -638,6 +638,10 @@
         pointerType: "-",
       };
 
+      function isPenPointer(type) {
+        return type === "pen" || type === "pencil";
+      }
+
       let demoInkMode = false;
       let singleFaceInkMode = false;
 
@@ -660,12 +664,12 @@
       }
 
       function liveCleanInkMode(modelOrSample = null) {
-        const isPen = modelOrSample?.pointerType === "pen" || brush.pointerType === "pen";
+        const isPen = isPenPointer(modelOrSample?.pointerType) || isPenPointer(brush.pointerType);
         return !demoInkMode && !singleFaceInkMode && !settings.dryCut && (isPen || settings.roughness < 0.2);
       }
 
       function livePenInkMode(modelOrSample = null) {
-        return liveCleanInkMode(modelOrSample) && (modelOrSample?.pointerType === "pen" || brush.pointerType === "pen");
+        return liveCleanInkMode(modelOrSample) && (isPenPointer(modelOrSample?.pointerType) || isPenPointer(brush.pointerType));
       }
 
       function syncSettings() {
@@ -5995,6 +5999,12 @@
       const WRITER_SEQUENCES = {
         right_pair_v1: {
           imageSize: [480, 480],
+          autoJoinDistance: 22,
+          autoJoinDotThreshold: 0.22,
+          liftTransition: {
+            pauseMs: 38,
+            travelMs: 56,
+          },
           strokes: [
             { spec: "right_side_dot_480_v1", start: 0, end: 0.34 },
             { spec: "right_nai_full_v4", start: 0.34, end: 1 },
@@ -6023,21 +6033,300 @@
 
       function interpolateWriterSpecPoints(points, stepsPerSegment = 10) {
         if (points.length < 2) return points.slice();
+        const sampleCount = Math.max(4, (points.length - 1) * Math.max(1, Math.round(stepsPerSegment)));
         const samples = [];
-        for (let i = 0; i < points.length - 1; i += 1) {
-          const a = points[i];
-          const b = points[i + 1];
-          for (let j = 0; j < stepsPerSegment; j += 1) {
-            const t = j / stepsPerSegment;
-            samples.push({
-              x: lerp(a.x, b.x, t),
-              y: lerp(a.y, b.y, t),
-              width: lerp(a.width, b.width, t),
-            });
+        for (let i = 0; i <= sampleCount; i += 1) {
+          const sampleProgress = sampleCount <= 0 ? 1 : i / sampleCount;
+          const sampleSpan = sampleProgress * (points.length - 1);
+          const index = Math.floor(sampleSpan);
+          const local = clamp(sampleSpan - index, 0, 1);
+          const p0 = points[Math.max(0, index - 1)] || points[index];
+          const p1 = points[index] || points[points.length - 1];
+          const p2 = points[Math.min(points.length - 1, index + 1)] || points[points.length - 1];
+          const p3 = points[Math.min(points.length - 1, index + 2)] || points[points.length - 1];
+          const point = catmullRomPoint([p0, p1, p2, p3], sampleProgress);
+          samples.push({
+            x: point.x,
+            y: point.y,
+            width: lerp(p1.width, p2.width, local),
+          });
+        }
+        return samples;
+      }
+
+      function stableNoise01(seed) {
+        const value = (Math.sin(seed * 12.9898 + 78.233) * 43758.5453);
+        return value - Math.floor(value);
+      }
+
+      function writerDirectionFromSample(sample) {
+        const dirX = Number.isFinite(sample?.dirX)
+          ? sample.dirX
+          : Number.isFinite(sample?.tangent?.x)
+            ? sample.tangent.x
+            : 1;
+        const dirY = Number.isFinite(sample?.dirY)
+          ? sample.dirY
+          : Number.isFinite(sample?.tangent?.y)
+            ? sample.tangent.y
+            : 0;
+        return normalize(dirX, dirY, 1, 0);
+      }
+
+      function shouldJoinWriterStrokes(previousEnd, nextStart, joinDistance, options = {}) {
+        if (!previousEnd || !nextStart) return false;
+        const gap = hypot(nextStart.x - previousEnd.x, nextStart.y - previousEnd.y);
+        if (!Number.isFinite(gap) || gap > joinDistance) return false;
+        const prevDir = writerDirectionFromSample(previousEnd);
+        const nextDir = writerDirectionFromSample(nextStart);
+        const directionDot = prevDir.x * nextDir.x + prevDir.y * nextDir.y;
+        const minCap = finite(options.maxCapBias, 0.58);
+        const minDot = finite(options.minDirectionDot, 0.33);
+        if (Number.isFinite(previousEnd.capBias) && previousEnd.capBias > minCap) return false;
+        return directionDot >= minDot;
+      }
+
+      function buildWriterSpecSamples(spec, frame, visibleProgress, options = {}) {
+        const transformed = spec.centerline.map((point) => transformWriterSpecPoint(spec, point, frame));
+        const stepCount = Math.max(10, Math.round((spec.samples ?? 80) * 0.62));
+        const allSamples = interpolateWriterSpecPoints(transformed, Math.max(4, Math.round(stepCount / Math.max(1, transformed.length - 1))));
+        const progress = clamp(visibleProgress ?? 1, 0.02, 1);
+        const timeOffset = finite(options.timeOffset, 0);
+        const visibleCount = Math.max(2, Math.min(allSamples.length, Math.round(1 + (allSamples.length - 1) * progress)));
+        const visible = allSamples.slice(0, visibleCount);
+        if (progress < 1 && visibleCount < allSamples.length) {
+          const prev = allSamples[visibleCount - 1];
+          const next = allSamples[visibleCount];
+          const exactIndex = (allSamples.length - 1) * progress;
+          const local = clamp(exactIndex - Math.floor(exactIndex), 0, 1);
+          visible[visible.length - 1] = {
+            x: lerp(prev.x, next.x, local),
+            y: lerp(prev.y, next.y, local),
+            width: lerp(prev.width, next.width, local),
+          };
+        }
+
+        const widthValues = visible.map((sample) => finite(sample.width, 5));
+        const maxWidth = Math.max(...widthValues);
+        const localSize = clamp(maxWidth * 0.94, 12, 56);
+        const minSampleStep = clamp(localSize * 0.065, 0.9, 2.6);
+
+        const startAction = spec.startAction || (spec.brushModel?.startAction ?? "pressed-entry");
+        const finishAction = spec.finishAction || (spec.brushModel?.finishAction ?? "sweep-lift");
+
+        const profile = visible.map((sample, index) => {
+          const prev = visible[Math.max(0, index - 1)];
+          const next = visible[Math.min(visible.length - 1, index + 1)];
+          const tangent = normalize(next.x - prev.x, next.y - prev.y, 1, 0);
+          const lookBack = visible[Math.max(0, index - 2)];
+          const lookAhead = visible[Math.min(visible.length - 1, index + 2)];
+          const prevDir = normalize(sample.x - lookBack.x, sample.y - lookBack.y, tangent.x, tangent.y);
+          const nextDir = normalize(lookAhead.x - sample.x, lookAhead.y - sample.y, tangent.x, tangent.y);
+          const turn = prevDir.x * nextDir.y - prevDir.y * nextDir.x;
+          const localProgress = visible.length > 1 ? index / (visible.length - 1) : 0;
+          const accel = smoothstep(0.06, 0.4, localProgress);
+          const decel = smoothstep(0.76, 1, localProgress);
+          const turnMagnitude = clamp(Math.abs(turn) * 1.4, 0, 1);
+          const jitter = ((stableNoise01(index * 17.31 + turnMagnitude * 3.6) + stableNoise01(index * 7.71 + 0.11) - 1) * 0.018);
+          const speed = clamp((0.55 + 0.95 * accel) * (1 - 0.78 * decel) * (1 - turnMagnitude * 0.56), 0.18, 1.5);
+          const segment = index > 0 ? hypot(sample.x - visible[index - 1].x, sample.y - visible[index - 1].y) : 0;
+          const duration = Math.max(3, segment * 1.6 / Math.max(0.35, speed));
+
+          const basePressure = clamp((sample.width / Math.max(1, localSize * 0.92) - 0.045) / 0.96, 0, 1);
+          const widthPressure = clamp(sample.width / Math.max(1, localSize * 1.28), 0.04, 1);
+          const startPhase = startAction === "pressed-entry" ? smoothstep(0.04, 0.16, localProgress) : 1;
+          const finishPhase = finishAction === "sweep-lift" ? clamp((localProgress - 0.78) / 0.22, 0, 1) : 0;
+          const startContact = smoothstep(0.02, 0.16, localProgress);
+          const endContact = 1 - smoothstep(0.84, 1, localProgress);
+          const contactGate = clamp(startContact * endContact, 0, 1);
+
+          return {
+            ...sample,
+            tangent,
+            dirX: tangent.x,
+            dirY: tangent.y,
+            duration,
+            localProgress,
+            widthPressure,
+            localPressure: clamp(lerp(basePressure, widthPressure, 0.34), 0, 1),
+            pointedBias: clamp((1 - Math.pow(1 - localProgress, 1.86)) * 0.32 + finishPhase * 0.34 + jitter * 0.28, 0, 1),
+            bellyBias: clamp(Math.pow(1 - localProgress, 0.46) * (1 - turnMagnitude * 0.22), 0, 1),
+            fanBias: localProgress > 0.85 ? clamp((localProgress - 0.85) * 2.6, 0, 1) : 0,
+            slipBias: localProgress > 0.84 ? clamp((localProgress - 0.84) * 2.2, 0, 1) : 0,
+            capBias: localProgress > 0.9 ? clamp((localProgress - 0.9) * 2.7, 0, 1) : 0,
+            pressure: clamp(
+              Math.pow(lerp(basePressure, widthPressure, 0.34 + jitter * 0.05) * (0.18 + 0.82 * startPhase), 0.04, 1) *
+                lerp(1, 0.2, finishPhase) *
+                contactGate +
+                jitter * 0.015,
+              0,
+              1,
+            ),
+            speedHint: speed,
+            rawDuration: duration,
+          };
+        });
+
+        const filteredProfile = [];
+        for (let index = 0; index < profile.length; index += 1) {
+          const sample = profile[index];
+          const previous = filteredProfile[filteredProfile.length - 1];
+          if (!previous) {
+            filteredProfile.push(sample);
+            continue;
+          }
+          const segment = hypot(sample.x - previous.x, sample.y - previous.y);
+          if (segment >= minSampleStep || index === profile.length - 1) {
+            filteredProfile.push(sample);
+          } else {
+            const alpha = clamp(segment / Math.max(0.2, minSampleStep), 0, 1);
+            previous.width = lerp(previous.width, sample.width, alpha);
+            previous.pressure = lerp(previous.pressure, sample.pressure, alpha);
+            previous.pointedBias = lerp(previous.pointedBias, sample.pointedBias, alpha);
+            previous.bellyBias = lerp(previous.bellyBias, sample.bellyBias, alpha);
+            previous.fanBias = lerp(previous.fanBias, sample.fanBias, alpha);
+            previous.slipBias = lerp(previous.slipBias, sample.slipBias, alpha);
+            previous.capBias = lerp(previous.capBias, sample.capBias, alpha);
           }
         }
-        samples.push(points[points.length - 1]);
-        return samples;
+
+        let tCursor = 0;
+        const strokes = filteredProfile.map((sample, index) => {
+          if (index > 0) {
+            const previous = filteredProfile[index - 1];
+            const segment = hypot(sample.x - previous.x, sample.y - previous.y);
+            const speedHint = Math.max(0.35, previous.speedHint || 0.9);
+            tCursor += Math.max(3, segment * 1.6 / speedHint);
+          }
+          return {
+            x: sample.x,
+            y: sample.y,
+            t: index === 0 ? timeOffset : timeOffset + tCursor,
+            resetStroke: options.resetStroke === true && index === 0,
+            writerSample: true,
+            pressure: sample.pressure,
+            pointedBias: sample.pointedBias,
+            dirX: sample.dirX,
+            dirY: sample.dirY,
+            inkScale: 0.98,
+            bellyBias: sample.bellyBias,
+            fanBias: sample.fanBias,
+            shapeBias: 0,
+            stampBias: 0,
+            rootBias: 0,
+            slipBias: sample.slipBias,
+            capBias: sample.capBias,
+            cornerBias: 0,
+            tiltX: 10,
+            tiltY: 4,
+            axisX: sample.tangent.x,
+            axisY: sample.tangent.y,
+            axisBias: 0.74,
+            continuousEnvelope: true,
+            twist: 0,
+            pointerType: "pen",
+          };
+        });
+
+        return {
+          samples: strokes,
+          modelSize: localSize,
+        };
+      }
+
+      function buildLiftTransitionSamples(from, to, modelSize, timeOffset = 0, liftOptions = {}) {
+        if (!from || !to) return [];
+        const travel = { x: to.x - from.x, y: to.y - from.y };
+        const distance = hypot(travel.x, travel.y);
+        if (distance < 0.5) return [];
+        const pauseMs = Math.max(0, finite(liftOptions.pauseMs, 32));
+        const travelMs = Math.max(24, finite(liftOptions.travelMs, 56));
+        const steps = Math.max(1, Math.round(distance / clamp(modelSize * 0.22, 12, 28)));
+        const transition = [];
+        transition.push({
+          x: from.x,
+          y: from.y,
+          t: timeOffset + pauseMs,
+          pressure: 0,
+          resetStroke: true,
+          tiltX: to.tiltX ?? 0,
+          tiltY: to.tiltY ?? 0,
+          twist: to.twist ?? 0,
+          axisX: to.axisX ?? travel.x,
+          axisY: to.axisY ?? travel.y,
+          axisBias: 0.1,
+          pointedBias: 0.86,
+          inkScale: 0,
+          bellyBias: 0,
+          fanBias: 0,
+          shapeBias: 0,
+          rootBias: 0,
+          slipBias: 0,
+          stampBias: 0,
+          capBias: 0.18,
+          cornerBias: 0,
+          writerSample: true,
+          pointerType: "pen",
+          continuousEnvelope: true,
+        });
+        for (let index = 1; index <= steps; index += 1) {
+          const t = index / steps;
+          transition.push({
+            x: lerp(from.x, to.x, t),
+            y: lerp(from.y, to.y, t),
+            t: timeOffset + pauseMs + t * travelMs,
+            pressure: 0,
+            tiltX: to.tiltX ?? 0,
+            tiltY: to.tiltY ?? 0,
+            twist: to.twist ?? 0,
+            axisX: to.axisX ?? travel.x,
+            axisY: to.axisY ?? travel.y,
+            axisBias: 0.1,
+            pointedBias: 0.74,
+            inkScale: 0,
+            bellyBias: 0,
+            fanBias: 0,
+            shapeBias: 0,
+            rootBias: 0,
+            slipBias: 0,
+            stampBias: 0,
+            capBias: 0.16,
+            cornerBias: 0,
+            writerSample: true,
+            pointerType: "pen",
+            continuousEnvelope: true,
+          });
+        }
+        return transition;
+      }
+
+      function runWriterSamples(samples, modelSize) {
+        if (!samples.length) return;
+        const previousSize = settings.size;
+        const previousPointerType = brush.pointerType;
+        const previousReplay = brush.writerReplay;
+        resetModelState();
+        brush.sampleCount = 0;
+        brush.drawing = true;
+        brush.pointerId = "writerSpec";
+        brush.writerReplay = true;
+        brush.speed = 0;
+        brush.pointerType = "pen";
+        settings.size = modelSize;
+        try {
+          for (const sample of samples) {
+            processSample(sample);
+          }
+        } finally {
+          settings.size = previousSize;
+          brush.pointerType = previousPointerType;
+          brush.writerReplay = previousReplay;
+        }
+        brush.drawing = false;
+        brush.pointerId = null;
+        brush.last = null;
+        brush.inkPoint = null;
+        brush.filteredSample = null;
       }
 
       function drawWriterSpecStroke(specName, options = {}) {
@@ -6045,74 +6334,11 @@
         if (!spec) return false;
         const visibleProgress = clamp(options.progress ?? 1, 0.02, 1);
         const frame = options.frame ?? writerFrameForSize(spec.imageSize);
-        const transformed = spec.centerline.map((point) => transformWriterSpecPoint(spec, point, frame));
-        const allSamples = interpolateWriterSpecPoints(transformed, 12);
-        const visibleCount = Math.max(2, Math.min(allSamples.length, Math.round(1 + (allSamples.length - 1) * visibleProgress)));
-        const samples = allSamples.slice(0, visibleCount);
-        if (visibleProgress < 1 && visibleCount < allSamples.length) {
-          const prev = allSamples[visibleCount - 1];
-          const next = allSamples[visibleCount];
-          const exactIndex = (allSamples.length - 1) * visibleProgress;
-          const local = clamp(exactIndex - Math.floor(exactIndex), 0, 1);
-          samples[samples.length - 1] = {
-            x: lerp(prev.x, next.x, local),
-            y: lerp(prev.y, next.y, local),
-            width: lerp(prev.width, next.width, local),
-          };
-        }
-        const upper = [];
-        const lower = [];
-        for (let i = 0; i < samples.length; i += 1) {
-          const current = samples[i];
-          const prev = samples[Math.max(0, i - 1)];
-          const next = samples[Math.min(samples.length - 1, i + 1)];
-          const tangent = normalize(next.x - prev.x, next.y - prev.y, 1, 0);
-          const perpX = -tangent.y;
-          const perpY = tangent.x;
-          const progress = i / Math.max(1, samples.length - 1);
-          const wholeProgress = (i / Math.max(1, samples.length - 1)) * visibleProgress;
-          const lift = 1 - smoothstep(0.72, 1, wholeProgress) * 0.38;
-          const liveTipLift = visibleProgress < 1 && i === samples.length - 1 ? 0.54 : 1;
-          const half = Math.max(0.7, samples[i].width * 0.5 * lift);
-          const upperHalf = half * liveTipLift * (spec.type === "nai" ? 0.72 : 0.82);
-          const lowerHalf = half * liveTipLift * (spec.type === "nai" ? 1.18 : 1.08);
-          upper.push({ x: current.x + perpX * upperHalf, y: current.y + perpY * upperHalf });
-          lower.push({ x: current.x - perpX * lowerHalf, y: current.y - perpY * lowerHalf });
-        }
-
-        const strokePath = new Path2D();
-        strokePath.moveTo(upper[0].x, upper[0].y);
-        for (let i = 1; i < upper.length; i += 1) {
-          const a = upper[i - 1];
-          const b = upper[i];
-          strokePath.quadraticCurveTo(a.x, a.y, (a.x + b.x) * 0.5, (a.y + b.y) * 0.5);
-        }
-        for (let i = lower.length - 1; i >= 0; i -= 1) {
-          const a = lower[i];
-          strokePath.lineTo(a.x, a.y);
-        }
-        strokePath.closePath();
-
-        ink.save();
-        ink.fillStyle = "#111411";
-        ink.globalAlpha = 0.96;
-        ink.globalCompositeOperation = "source-over";
-        ink.filter = demoInkMode ? "blur(0.02px)" : "none";
-        ink.fill(strokePath);
-        ink.filter = "none";
-        ink.globalAlpha = 0.18;
-        ink.lineCap = "round";
-        ink.lineJoin = "round";
-        for (let i = 1; i < samples.length; i += 1) {
-          const a = samples[i - 1];
-          const b = samples[i];
-          ink.lineWidth = Math.max(1, ((a.width + b.width) * 0.18));
-          ink.beginPath();
-          ink.moveTo(a.x, a.y);
-          ink.lineTo(b.x, b.y);
-          ink.stroke();
-        }
-        ink.restore();
+        const built = buildWriterSpecSamples(spec, frame, visibleProgress, { resetStroke: options.resetStroke });
+        const modelSize = built.modelSize;
+        const samples = built.samples;
+        if (!samples.length) return false;
+        runWriterSamples(samples, modelSize);
 
         if (options.label !== false) {
           overlay.save();
@@ -6155,12 +6381,53 @@
         const sequence = WRITER_SEQUENCES[sequenceName];
         if (!sequence) return false;
         const frame = writerFrameForSize(sequence.imageSize);
+        const autoJoinDistance = finite(sequence.autoJoinDistance, 20);
+        const autoJoinDotThreshold = finite(sequence.autoJoinDotThreshold, 0.28);
+        const liftTransition = sequence.liftTransition || {};
+        let cursorT = 0;
+        let modelSize = 0;
+        let last = null;
         let rendered = false;
-        for (const stroke of sequence.strokes) {
-          if (progress < stroke.start) continue;
+        const stitchedSamples = [];
+        const currentStrokes = sequence.strokes.filter((stroke) => progress >= stroke.start);
+        for (const stroke of currentStrokes) {
           const localProgress = progress >= stroke.end ? 1 : clamp((progress - stroke.start) / (stroke.end - stroke.start), 0.02, 1);
-          rendered = drawWriterSpecStroke(stroke.spec, { progress: localProgress, frame, label: false }) || rendered;
+          const spec = WRITER_STROKE_SPECS[stroke.spec];
+          if (!spec) continue;
+          const built = buildWriterSpecSamples(spec, frame, localProgress, {
+            timeOffset: cursorT,
+          });
+          const samples = built.samples;
+          if (!samples.length) continue;
+          const first = samples[0];
+          const shouldConnect =
+            stroke.connectToPrevious === true ||
+            (stroke.connectToPrevious == null &&
+              shouldJoinWriterStrokes(last, first, autoJoinDistance, {
+                minDirectionDot: autoJoinDotThreshold,
+                maxCapBias: 0.64,
+              }));
+          if (!shouldConnect && last) {
+            const transition = buildLiftTransitionSamples(last, first, modelSize || built.modelSize, cursorT, liftTransition);
+            stitchedSamples.push(...transition);
+            if (transition.length) {
+              cursorT = transition[transition.length - 1].t + 12;
+            }
+          }
+          for (const sample of samples) {
+            stitchedSamples.push({
+              ...sample,
+              resetStroke: !shouldConnect && sample === samples[0],
+              pointerType: sample.pointerType ?? "pen",
+            });
+          }
+          cursorT = samples[samples.length - 1].t + 12;
+          last = samples[samples.length - 1];
+          modelSize = Math.max(modelSize, built.modelSize);
+          rendered = true;
         }
+        if (!stitchedSamples.length) return false;
+        runWriterSamples(stitchedSamples, modelSize || 12);
         overlay.save();
         overlay.strokeStyle = "rgba(120, 58, 24, 0.26)";
         overlay.lineWidth = 1;
@@ -7637,7 +7904,7 @@
         const point = getLocalPoint(event);
         let pressure = finite(event.pressure, 0);
         const pointerType = event.pointerType || fallbackPointerType || brush.pointerType || "unknown";
-        const isPen = pointerType === "pen";
+        const isPen = isPenPointer(pointerType);
         if (!isPen) pressure = settings.mousePressure;
         if (brush.drawing && pressure <= 0) pressure = isPen ? 0.03 : settings.mousePressure;
 
@@ -8591,7 +8858,7 @@
       }
 
       function smoothLivePenSample(sample) {
-        if (sample.pointerType !== "pen" || !liveCleanInkMode(sample)) return sample;
+        if (!isPenPointer(sample.pointerType) || sample.writerSample || !liveCleanInkMode(sample)) return sample;
         if (!brush.filteredSample) {
           brush.filteredSample = { ...sample };
           return sample;
@@ -8615,6 +8882,14 @@
       }
 
       function processSample(sample) {
+        if (!sample) return;
+        if (sample?.resetStroke) {
+          brush.last = null;
+          brush.filteredSample = null;
+          brush.inkPoint = null;
+          brush.speed = 0;
+          brush.stampTravel = 0;
+        }
         sample = smoothLivePenSample(sample);
         if (!brush.last) {
           brush.last = sample;
@@ -8625,10 +8900,12 @@
           brush.length = finite(target.length, 4);
           brush.wedge = target.wedge;
           settleBrush(target);
-          drawFootprint(ink, sample.x, sample.y, brush);
+          if (sample.pressure > 0.005 && !brush.writerReplay) {
+            drawFootprint(ink, sample.x, sample.y, brush);
+          }
           {
-            const center = contactCenter(sample.x, sample.y, brush);
-            brush.inkPoint = { x: center.x, y: center.y, width: bridgeInkWidth(brush), inkScale: brush.inkScale };
+          const center = contactCenter(sample.x, sample.y, brush);
+          brush.inkPoint = { x: center.x, y: center.y, width: bridgeInkWidth(brush), inkScale: brush.inkScale };
           }
           brush.stampTravel = 0;
           drawOverlay(sample.x, sample.y);
@@ -8636,10 +8913,19 @@
           return;
         }
 
+        if (sample.writerSample && sample.pressure <= 0.004) {
+          const target = targetShape(sample, brush.last);
+          settleBrush(target);
+          brush.last = sample;
+          return;
+        }
+
         const previous = brush.last;
         const distance = hypot(sample.x - previous.x, sample.y - previous.y);
-        const livePenSample = sample.pointerType === "pen" || previous.pointerType === "pen";
+        const livePenSample = isPenPointer(sample.pointerType) || isPenPointer(previous.pointerType);
+        const isWriterReplay = brush.writerReplay === true && sample.writerSample;
         if (
+          !sample.writerSample &&
           livePenSample &&
           distance < 0.45 &&
           Math.abs(sample.pressure - previous.pressure) < 0.012 &&
@@ -8699,6 +8985,7 @@
             brush.stampTravel >= Math.max(2.8, footprintGap * lerp(0.72, 0.32, brush.stampBias));
           const pausedForContact = stationaryContact && brush.stampTravel >= footprintGap;
           const needsFootprint =
+            !isWriterReplay &&
             !liveCleanInkMode() &&
             (pressureBloom ||
               stampFootprint ||
