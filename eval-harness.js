@@ -1,6 +1,7 @@
 // 叠合重合度评估 + 固定尺寸沙箱渲染（调优专用，不参与正常书写）
 // 关键：渲染物理非尺度不变，故一切测量在固定 600px 沙箱进行，脱离可见画布视口。
-// 用法：await __H.init() → 载入真迹、沙箱渲染 strokes.js 五笔、按最近笔画切分参照、出报告
+// 用法：在工作台页面控制台 await import('./eval-harness.js')（页面相对；站点在 / 或 /bimo/ 下都行）
+//       await __H.init() → 载入真迹、沙箱渲染 strokes.js 五笔、按最近笔画切分参照、出报告
 //       await __H.evalNodes(key,k,nodes) → 沙箱渲染候选并对比第 k 笔参照
 // 坐标：字格 500x500 掩膜，1px = 2 归一化单位(gu)
 //
@@ -9,10 +10,16 @@
 //   DETERMINISTIC=true 时每次 render 前 sb.brush._strokeCount=0（五笔同种子 7.13）、
 //   sb.player.fixedDt = FIXED_DT = 1/60（固定时间片，脱离 rAF 时序）；
 //   真迹 ref-cell.png md5 2c0020a610371141f903fc9bdba6835f；掩膜阈值见 redMask/canvasMask。
-//   金掩膜存 /golden/<name>-whole.png、-s1..s5.png（黑=墨）；H.saveGolden(name) 生成、
+//   金掩膜存 golden/<name>-whole.png、-s1..s5.png（黑=墨）；H.saveGolden(name) 生成、
 //   H.goldenCheck(name) 逐像素比对。实时对照分布需显式 __H.DETERMINISTIC=false。
 //   注意：__H.CANON_SIZE 非空时沙箱笔宽以它为准而非滑块；改笔宽后要 __H.resetSandboxes()。
+//   资源与端点一律用 import.meta.url 解析（ref-cell.png / golden/ / js/strokes.js / save-png），
+//   GitHub Pages 子路径下不需要改；无服务器时 saveGolden 回退为逐张下载 PNG（返回值 mode:'download'）。
 (() => {
+  // 与本文件同目录的资源（模块 URL 为基准，不依赖页面路径）
+  const here = (rel) => new URL(rel, import.meta.url).href;
+  const strokesMod = () => import(here('./js/strokes.js?t=' + performance.now()));   // 绕过模块缓存拿最新 strokes.js
+  const SAVE_PNG_URL = here('./save-png');
   const N = 500;       // 掩膜分辨率
   const RSIZE = 600;   // 固定渲染画布尺寸（brush.size 基准 = 滑块值）
   const H = window.__H = { N, RSIZE, CANON_SPEED: 1.3,
@@ -176,24 +183,39 @@
   const unionMasks = (ms) => { const w = new Uint8Array(N*N); for (const m of ms) for (let i=0;i<N*N;i++) if (m[i]) w[i] = 1; return w; };
   const diffCount = (a, b) => { let n = 0; for (let i = 0; i < N*N; i++) if (a[i] !== b[i]) n++; return n; };
 
-  // POST 到 /save-png，服务器写 exports/export-<ts>.png 并返回路径；调用方再移到 golden/<name>-*.png
+  // 保存一张 PNG（dataURL）：本地 server.js 有 POST save-png → 写 exports/export-<ts>.png 并返回路径；
+  // 无服务器（GitHub Pages）时经 js/export-fallback.js 回退为浏览器下载（文件名即 fileName）。
+  // 控制台调用没有用户手势，跳过 share/剪贴板。返回 { ok, mode:'server'|'download'|…, text?, name }
+  H.savePng = async (dataURL, fileName = 'export-' + Date.now() + '.png') => {
+    const { exportBlob, dataURLToBlob } = await import(here('./js/export-fallback.js'));
+    return exportBlob({ blob: dataURLToBlob(dataURL), name: fileName, endpoint: SAVE_PNG_URL, serverBody: dataURL,
+      allowShare: false, allowClipboard: false });
+  };
+
+  // 金掩膜落盘：有服务器 → exports/export-<ts>.png（调用方再移到 golden/<name>-*.png）；
+  // 无服务器 → 逐张下载，文件名已是 golden 目标名，直接放进 golden/。返回值 mode 标明走的哪条路。
   H.saveGolden = async (name) => {
     if (!H.ours || H.ours.length !== 5) throw new Error('先 __H.init()/recapture() 得到 H.ours 五笔');
     const items = [['whole', unionMasks(H.ours)], ...H.ours.map((m, k) => ['s' + (k+1), m])];
     const files = [];
+    let mode = 'server';
     for (const [tag, m] of items) {
-      const r = await fetch('/save-png', { method: 'POST', body: maskToPngDataURL(m) });
-      files.push({ target: 'golden/' + name + '-' + tag + '.png', saved: await r.text(), px: m.reduce((a, b) => a + b, 0) });
+      const fileName = name + '-' + tag + '.png';
+      const r = await H.savePng(maskToPngDataURL(m), fileName);
+      if (!r.ok) throw new Error(`保存 ${fileName} 失败（${r.mode}${r.status ? ' HTTP ' + r.status : ''}）：${r.text || ''}`);
+      if (r.mode !== 'server') mode = r.mode;
+      files.push({ target: 'golden/' + fileName, saved: r.mode === 'server' ? r.text : r.mode + ':' + r.name, mode: r.mode,
+        px: m.reduce((a, b) => a + b, 0) });
     }
-    return { name, size: H.sandboxSize, deterministic: H.DETERMINISTIC, files };
+    return { name, size: H.sandboxSize, deterministic: H.DETERMINISTIC, mode, files };
   };
 
-  // 加载 /golden/<name>-*.png 回掩膜，与当前 H.ours（rerender=true 则先 recapture）逐像素比对
+  // 加载 golden/<name>-*.png 回掩膜，与当前 H.ours（rerender=true 则先 recapture）逐像素比对
   H.goldenCheck = async (name, rerender = false) => {
     if (rerender || !H.ours || H.ours.length !== 5) await H.recapture();
     const tags = ['whole', 's1', 's2', 's3', 's4', 's5'];
     const gold = {};
-    for (const t of tags) gold[t] = pngToMask(await loadImg('/golden/' + name + '-' + t + '.png'));
+    for (const t of tags) gold[t] = pngToMask(await loadImg(here('./golden/' + name + '-' + t + '.png')));
     const perStroke = H.ours.map((m, k) => {
       const d = diffCount(m, gold['s' + (k+1)]);
       return { s: k+1, identical: d === 0, diffPixels: d, oursPx: m.reduce((a, b) => a + b, 0), goldPx: gold['s'+(k+1)].reduce((a, b) => a + b, 0) };
@@ -204,7 +226,7 @@
 
   // 快渲染整字 IoU（renderFast 五笔并集 vs 真迹），供与实时/确定性路径对照
   H.fastWholeIoU = async () => {
-    const mod = await import('/js/strokes.js?t=' + performance.now());
+    const mod = await strokesMod();
     const ms = mod.YONG_STROKES.map(s => H.renderFast(s.nodes));
     const per = ms.map((m, k) => H.refStrokes ? H.cmp(m, H.refStrokes[k], 0, 2).iou : null);
     return { wholeIoU: H.cmp(unionMasks(ms), H.truthWhole, 0, 2).iou, perStroke: per };
@@ -251,9 +273,9 @@
   };
 
   H.init = async () => {
-    const truthImg = await loadImg('/ref-cell.png');
+    const truthImg = await loadImg(here('./ref-cell.png'));
     H.truthWhole = redMask(truthImg);
-    const mod = await import('/js/strokes.js?t=' + performance.now());
+    const mod = await strokesMod();
     H.strokeDefs = mod.YONG_STROKES;
     H.ours = [];
     for (let i = 0; i < 5; i++) H.ours.push(await H.render('ours' + i, mod.YONG_STROKES[i].nodes));
@@ -289,7 +311,7 @@
   // 先 setContext(k) 缓存"其余四笔"并集（用最新 strokes.js），再反复 evalWhole(k,key,nodes)
   H._others = {};
   H.setContext = async (k) => {
-    const mod = await import('/js/strokes.js?t=' + performance.now());
+    const mod = await strokesMod();
     H.strokeDefs = mod.YONG_STROKES;
     let others = new Uint8Array(N * N);
     for (let j = 0; j < 5; j++) {
@@ -318,7 +340,7 @@
 
   // 用最新 strokes.js 重采我方五笔（改完节点后调用）
   H.recapture = async () => {
-    const mod = await import('/js/strokes.js?t=' + performance.now());
+    const mod = await strokesMod();
     H.strokeDefs = mod.YONG_STROKES;
     H.ours = [];
     for (let i = 0; i < 5; i++) H.ours.push(await H.render('ours' + i, mod.YONG_STROKES[i].nodes));

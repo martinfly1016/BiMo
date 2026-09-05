@@ -30,6 +30,8 @@
 //   毫束倒向 ℓ = −(cos az, sin az)：从笔腹指向锋尖（锋尖在笔杆的反方向）。锋尖侧薄、笔腹侧厚。
 //   验收：右手常规握姿（笔杆倒向右下，az≈π/4..π/2）向右写横 → ℓ 朝上/左上 → 锋尖在上缘 → 上缘薄。
 
+import { exportBlob } from './export-fallback.js';
+
 const DEG = 180 / Math.PI;
 const RAD = Math.PI / 180;
 const TAU = Math.PI * 2;
@@ -434,18 +436,20 @@ export class PenInput {
 
   clearRecording() { this.strokes.length = 0; }
 
-  // POST 到 /save-json?name=pen-samples（端点在本仓库 server.js）；返回 { ok, status, text }。
-  // 404 = 预览服务器进程还是旧版 server.js，重启 node server.js 即可。
-  async exportToServer(name = 'pen-samples') {
-    const body = JSON.stringify(this.export());
-    try {
-      const r = await fetch(`/save-json?name=${encodeURIComponent(name)}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-      });
-      const text = await r.text();
-      return { ok: r.ok, status: r.status, text, bytes: body.length };
-    } catch (err) {
-      return { ok: false, status: 0, text: String(err), bytes: body.length };
-    }
+  // 导出录到的笔画：优先 POST 页面相对端点 save-json?name=…（本仓库 server.js，页面在 / 或 /bimo/ 下都对）；
+  // 无服务器（GitHub Pages 等纯静态站）时走 js/export-fallback.js 的回退链：系统共享 → 下载 → 剪贴板/文本。
+  // 必须从用户手势（点击）的同步链路调用，share 才不会被 Safari 拒绝。
+  // 返回 { ok, mode: 'server'|'share'|'download'|'clipboard'|'text', status?, text?, bytes, name }。
+  exportToServer(name = 'pen-samples', onStatus) {
+    const json = JSON.stringify(this.export());
+    return exportBlob({
+      blob: new Blob([json], { type: 'application/json' }),
+      name: `${name}-${Date.now()}.json`,          // 与 server.js 的 exports/<name>-<ts>.json 同构
+      title: '笔墨手写样本',
+      endpoint: `save-json?name=${encodeURIComponent(name)}`,
+      serverBody: json, serverHeaders: { 'Content-Type': 'application/json' },
+      clipboardText: json,
+      onStatus,
+    });
   }
 }

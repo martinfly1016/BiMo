@@ -1,6 +1,7 @@
 # iPad 真机联调指南（iPad Air 13 M2 + Apple Pencil Pro）
 
-目的：把 Mac 上的 bimo 工作台通过局域网开到 iPad Safari 上，用 `probe.html` 摸清这台设备实际给到网页的输入能力，再进主页 `/` 手写。
+目的：把 bimo 工作台开到 iPad Safari 上，用 `probe.html` 摸清这台设备实际给到网页的输入能力，再进主页手写。
+两条路：**方式一**——Mac 上 `node server.js --lan` 走局域网（第 1、2 节，导出直接落到 Mac 的 `exports/`）；**方式二**——打开 GitHub Pages 在线版（第 1b 节，HTTPS、无需同一 Wi-Fi，导出改为系统共享/下载）。第 3～5、7 节两条路通用。
 
 ## 0. 先记住这台设备的硬事实
 
@@ -39,7 +40,25 @@
 4. 第一次监听 0.0.0.0 时 macOS 可能弹「是否允许 node 接受传入网络连接」——点允许。若系统设置里防火墙是「阻止所有传入连接」，需先关掉。
 5. Mac 上若开着 VPN（全局代理模式）可能会劫持局域网路由；连不上时先断开 VPN 试。
 
-## 2. iPad 端：打开页面
+## 1b. 方式二：GitHub Pages（HTTPS，无需局域网）
+
+不用开 Mac 服务器、不用同一 Wi-Fi，随时随地能写；代价是没有 `/save-*` 端点，导出不再落到 `exports/`。
+
+1. iPad Safari 打开在线版：`https://martinfly1016.github.io/BiMo/`（项目站点在子路径 `/bimo/` 下，页面内所有链接与资源都是相对路径）。探针页是同目录下的 `probe.html`。
+2. **添加到主屏幕**（第 5 节同法）：HTTPS 站点的 standalone 模式更稳，且不会再有「不安全」提示。
+3. **导出方式变了**（工作台「导出手写样本」与探针「导出结果」都一样，逻辑在 `js/export-fallback.js`，探针页内联了同一份）：
+   - 页面加载时先探一次 `save-json` 端点；Pages 上没有 → 点导出时**直接弹出系统共享面板**（`navigator.share`，iPadOS 15+）：
+     - 选 **AirDrop → 你的 Mac**：文件进 Mac 的「下载」，文件名 `pen-samples-<时间戳>.json` / `probe-<时间戳>.json`（与 `exports/` 里的命名同构，拷进 `exports/` 即可继续用原来的脚本）；
+     - 或选 **存储到「文件」**：留在 iPad 的「文件」App，稍后经 iCloud Drive / AirDrop 拿回 Mac。
+   - 若系统不支持文件共享（旧版 Safari）→ 自动改为**浏览器下载**，文件在「文件」App 的「下载」文件夹；
+   - 再不行 → 复制到剪贴板 / 页面显示可全选的 JSON（通用剪贴板可直接在 Mac 粘贴）。
+   - 状态文字会写明走了哪一条（"已用系统共享发送…" / "已改为下载…"）。取消共享面板 = 本次未导出，可再点一次。
+   - **桌面浏览器**（Mac 上直接开 Pages，或 `localhost`）：不弹系统共享面板、也不发探测请求——先 POST，没有端点就直接下载到浏览器的「下载」文件夹。共享只在触屏设备（`navigator.maxTouchPoints > 0`）上参与，因为 macOS Safari / Chrome 在 https 与 localhost 上同样暴露 `navigator.share`，桌面用户要的却是文件直接落盘。
+   - 端点判定（`serverSays`）：只有 `server.js` 自己的 400/413 原话（"Bad name…" / "Body is not valid JSON…" / "Payload Too Large…"）和已确认有服务器后的非 2xx 才按"服务器拒绝"红字报告、不回退；其余非 2xx 都视作没有端点、照常回退——GitHub Pages 回 405、`python3 -m http.server` 回 501、旧版 `server.js` 进程回 404，托管/CDN 若回 403 等意外状态码，文案会写成「端点返回 HTTP 403，已改为…」。
+4. 评估体系（控制台 `await import('./eval-harness.js')`）在 Pages 上同样能跑：`ref-cell.png`、`golden/`、`js/strokes.js` 都按模块位置解析；`__H.saveGolden()` 没有服务器时回退为逐张下载 PNG（返回值 `mode:'download'`，文件名已是 `golden/` 目标名）。
+5. 改了代码要 `git push` 才会更新在线版（Pages 构建约 1 分钟）；主屏幕图标打开的 standalone 没有刷新按钮，从 App 切换器上滑关掉再开。
+
+## 2. iPad 端：打开页面（方式一）
 
 1. Safari 地址栏输入日志里的 `http://<ip>:8642/probe.html`（注意是 **http**，不是 https；Safari 会提示「不安全」，忽略即可）。
 2. 探针页用法：
@@ -83,7 +102,7 @@ Safari → 分享按钮 → **添加到主屏幕**。`probe.html` 与主页都�
 
 ## 6. 把导出的 JSON 拿回来
 
-- 探针「导出结果」和工作台「导出 PNG」都通过 `POST /save-json` / `POST /save-png` 直接写进 Mac 项目的 **`exports/`** 目录（已在 `.gitignore`）：
+- **方式一（局域网 server.js）**：探针「导出结果」和工作台「导出手写样本」通过 `POST save-json`（评估工具的出图通过 `POST save-png`）直接写进 Mac 项目的 **`exports/`** 目录（已在 `.gitignore`）：
 
   ```bash
   ls -t exports/probe-*.json | head        # 最近的探针结果
@@ -91,14 +110,16 @@ Safari → 分享按钮 → **添加到主屏幕**。`probe.html` 与主页都�
   ```
 
 - `/save-json?name=<prefix>` 的 `name` 只允许 `[a-z0-9-]`，默认 `data`；正文上限 5MB，超过返回 413。
-- 导出失败（页面红字）时，探针页下方「查看 / 手动复制 JSON」可展开文本框，长按全选复制，通过通用剪贴板（Mac 与 iPad 同一 Apple ID + 蓝牙/Wi-Fi 开着）直接在 Mac 上粘贴。
+- **方式二（GitHub Pages）**：没有 `exports/` 目录——导出走系统共享（AirDrop 到 Mac / 存到「文件」）或浏览器下载，见第 1b 节；文件名同构，拷进 Mac 的 `exports/` 即可。
+- 两种方式都失败（页面红字）时，探针页下方「查看 / 手动复制 JSON」可展开文本框，长按全选复制，通过通用剪贴板（Mac 与 iPad 同一 Apple ID + 蓝牙/Wi-Fi 开着）直接在 Mac 上粘贴。
 
 ## 7. 排错速查
 
 | 现象 | 查什么 |
 |---|---|
-| iPad 打不开 URL | Mac 是否用了 `--lan`；两台是否同一 Wi-Fi 网段；Mac 防火墙；VPN；`lsof -nP -iTCP:8642 -sTCP:LISTEN` 应显示 `*:8642` 而不是 `127.0.0.1:8642` |
+| iPad 打不开 URL（方式一） | Mac 是否用了 `--lan`；两台是否同一 Wi-Fi 网段；Mac 防火墙；VPN；`lsof -nP -iTCP:8642 -sTCP:LISTEN` 应显示 `*:8642` 而不是 `127.0.0.1:8642` |
 | 页面能开，导出 413 | JSON 超 5MB——先「清零」再采样（样本池已有上限，正常不会到） |
+| 方式一下点导出，文件却被"下载"而没进 `exports/` | 预览进程还是旧版 `server.js`（POST save-json → 404，与静态站无法区分，于是走了下载）：重启 `node server.js` 即可。桌面浏览器开 Pages 时这是正常路径 |
 | `pointermove/秒` 远低于 60 | 低电量模式；Safari 后台标签太多；页面被缩放（探针「视口」一行 scale≠1） |
 | 合并样本数 ≈1 | Safari < 18.2，或事件来自合成派发；看「特性探测」一栏 `getCoalescedEvents` 是否为「是」 |
 | altitude/azimuth 显示「否」 | iPadOS < 18.2：走 Touch Events 私有字段回退（探针「Touch Events 私有扩展」一栏） |

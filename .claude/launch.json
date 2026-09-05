@@ -4,14 +4,30 @@
     {
       "name": "bimo",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js", "8642"],
+      "runtimeArgs": [
+        "server.js",
+        "8642"
+      ],
       "port": 8642
     },
     {
       "name": "bimo-lan",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["server.js", "8642", "--lan"],
+      "runtimeArgs": [
+        "server.js",
+        "8642",
+        "--lan"
+      ],
       "port": 8642
+    },
+    {
+      "name": "bimo-pages-sim",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "-e",
+        "const http=require('http'),fs=require('fs'),p=require('path');const R=p.resolve('..');const M={'.html':'text/html; charset=utf-8','.css':'text/css','.js':'text/javascript','.json':'application/json','.png':'image/png','.md':'text/markdown; charset=utf-8','.svg':'image/svg+xml','.mp4':'video/mp4'};http.createServer((q,s)=>{if(q.method!=='GET'&&q.method!=='HEAD'){s.writeHead(405,{Allow:'GET, HEAD'});return s.end('405 Method Not Allowed');}let u;try{u=decodeURIComponent(new URL(q.url,'http://x').pathname);}catch(e){s.writeHead(400);return s.end();}let f=p.normalize(p.join(R,u));if(f!==R&&!f.startsWith(R+p.sep)){s.writeHead(403);return s.end();}if(u.endsWith('/'))f=p.join(f,'index.html');fs.readFile(f,(e,d)=>{if(e){s.writeHead(404);return s.end('404 Not Found');}s.writeHead(200,{'Content-Type':M[p.extname(f).toLowerCase()]||'application/octet-stream','Cache-Control':'no-store'});s.end(d);});}).listen(8650,'127.0.0.1',()=>console.log('pages-sim (static, no /save-*): http://localhost:8650/bimo/'));"
+      ],
+      "port": 8650
     }
   ]
 }

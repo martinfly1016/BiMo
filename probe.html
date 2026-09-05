@@ -610,20 +610,90 @@ setInterval(render, 250);
 // 面板刷新时顺带清理最近 1 秒的 pen move 时间戳（仅用于诊断）
 setInterval(() => { const a = R.rafLive.penMoveStamps; if (!a) return; const t = now(); while (a.length && t - a[0] > 1000) a.shift(); }, 500);
 
-// ---------- 导出 ----------
+// ---------- 导出（回退链，与 js/export-fallback.js 同步；本页是独立非模块页面，故内联一份等价实现） ----------
+// (a) POST 页面相对 save-json?name=probe（Mac 上 node server.js；页面在 / 或 /bimo/ 下都对）→ exports/ 路径
+// (b) navigator.share({files})：iPad Safari 15+，AirDrop 到 Mac 或存到「文件」（GitHub Pages 上没有服务器时的主路径）
+// (c) <a download>：iPad 进「文件」App 的「下载」，桌面进「下载」文件夹  (d) 剪贴板 / 展开下方文本框手动复制
+// 端点判定（serverSays，与模块版同一套）：2xx 成功；400/413 且响应体是 server.js 原话 → 服务器在拒绝，如实报告不回退；
+// 探测确认过有服务器后再遇非 2xx 也如实报告；其余非 2xx（404/405/501，以及 CDN/反代对 POST 的 403/400/502…）→ 视作无端点，回退。
+// share 必须在用户手势的同步链路里：页面加载时先探测端点（POST 空体：server.js 回 400 不落盘），点击时已知无服务器就直接 share。
+// share 只在触屏设备（iPad）上参与（shareable）：桌面 Safari/Chrome 也有 navigator.share，但桌面要的是直接下载，也不探测。
+let serverKnown = null;   // true / false / null(未知)
+const SERVER_REJECT = /^(Bad name\b|Body is not valid JSON\b|Payload Too Large\b|Bad URL\b|Bad percent-encoding\b|Null byte in path\b|Bad path\b)/;
+const ABSENT_USUAL = new Set([404, 405, 501]);
+const serverSays = (status, text = '') => (status >= 200 && status < 300) ? 'ok'
+  : ((status === 400 || status === 413) && SERVER_REJECT.test(String(text).trimStart())) ? 'reject' : 'absent';
+const isTouchDevice = () => (navigator.maxTouchPoints > 0) || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+const shareable = () => !!(navigator.share && navigator.canShare) && isTouchDevice();
+const probeServer = () => shareable() ? fetch('save-json', { method: 'POST', cache: 'no-store' })
+  .then(async r => serverSays(r.status, await r.text().catch(() => '')) !== 'absent', () => false)
+  .then(v => (serverKnown = v)) : Promise.resolve(null);
+probeServer();
+const noServerReason = (r) => r.serverStatus === 0 ? '连不上导出服务器'
+  : (typeof r.serverStatus === 'number' && !ABSENT_USUAL.has(r.serverStatus)) ? `端点返回 HTTP ${r.serverStatus}` : '无导出服务器';
+const kb = n => (n / 1024).toFixed(1) + ' KB';
+async function exportBlob({ blob, name, endpoint, serverBody, serverHeaders, title, clipboardText, onStatus }) {
+  const bytes = blob.size, st = onStatus || (() => {});
+  const extra = {};   // 回退结果附带 serverStatus（POST 的状态码；0 = 网络错误；跳过 POST 时没有）
+  if (!(shareable() && serverKnown === false)) {
+    st(`上传 ${name}（${kb(bytes)}）…`);
+    try {
+      const r = await fetch(endpoint, { method: 'POST', headers: serverHeaders, body: serverBody });
+      const text = await r.text();
+      const verdict = serverKnown === true && !r.ok ? 'reject' : serverSays(r.status, text);
+      if (verdict === 'ok') { serverKnown = true; return { ok: true, mode: 'server', status: r.status, text, bytes, name }; }
+      if (verdict === 'reject') { serverKnown = true; return { ok: false, mode: 'server', status: r.status, text, bytes, name }; }
+      serverKnown = false; extra.serverStatus = r.status;
+      st(`${noServerReason(extra)}，改用系统共享 / 下载…`);
+    } catch (err) { extra.serverStatus = 0; st('连不上导出服务器，改用系统共享 / 下载…'); }
+  }
+  const file = new File([blob], name, { type: blob.type });
+  const active = navigator.userActivation ? navigator.userActivation.isActive : true;
+  if (active && shareable() && navigator.canShare({ files: [file] })) {
+    st('打开系统共享…');
+    try { await navigator.share({ files: [file], title }); return { ok: true, mode: 'share', bytes, name, ...extra }; }
+    catch (err) { if (err && err.name === 'AbortError') return { ok: false, mode: 'share', text: 'cancelled', bytes, name, ...extra }; }
+  }
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener'; a.hidden = true;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    return { ok: true, mode: 'download', bytes, name, ...extra };
+  } catch (err) { /* 继续 */ }
+  try {
+    if (clipboardText != null && navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(clipboardText);
+      return { ok: true, mode: 'clipboard', bytes, name, text: clipboardText, ...extra };
+    }
+  } catch (err) { /* 继续 */ }
+  return { ok: false, mode: 'text', bytes, name, text: clipboardText, ...extra };
+}
+
 const exportMsg = $('exportMsg'), jsonOut = $('jsonOut');
 $('btnExport').addEventListener('click', async () => {
   const json = JSON.stringify(snapshot(), null, 2);
   jsonOut.value = json;
-  exportMsg.textContent = '上传中…';
-  try {
-    const r = await fetch('/save-json?name=probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
-    const text = await r.text();
-    if (!r.ok) throw new Error(`HTTP ${r.status}: ${text}`);
-    exportMsg.innerHTML = `已保存到 Mac：<b style="color:#7ee2a8">${esc(text)}</b>（${(json.length / 1024).toFixed(1)} KB）`;
-  } catch (err) {
-    exportMsg.innerHTML = `<span style="color:#ff8a80">导出失败：${esc(err.message)}</span><br>请确认 Mac 上以 <code>node server.js 8642 --lan</code> 启动、iPad 与 Mac 在同一 Wi-Fi；也可展开下方手动复制 JSON。`;
-  }
+  const name = 'probe-' + Date.now() + '.json';   // 与 server.js 的 exports/probe-<ts>.json 同构
+  const size = kb(json.length);
+  const setMsg = (t) => { exportMsg.textContent = t; };
+  // exportBlob 到 navigator.share 之前没有 await：保住点击手势链路
+  const r = await exportBlob({
+    blob: new Blob([json], { type: 'application/json' }), name, title: 'bimo 探针结果',
+    endpoint: 'save-json?name=probe', serverBody: json, serverHeaders: { 'Content-Type': 'application/json' },
+    clipboardText: json, onStatus: setMsg,
+  });
+  const ok = (html) => { exportMsg.innerHTML = `<span style="color:#7ee2a8">${html}</span>`; };
+  const bad = (html) => { exportMsg.innerHTML = `<span style="color:#ff8a80">${html}</span>`; };
+  const why = esc(noServerReason(r));   // 无导出服务器 / 端点返回 HTTP 403 / 连不上导出服务器
+  const where = isTouchDevice() ? 'iPad 在「文件」App 的「下载」里' : '在浏览器的「下载」文件夹';
+  if (r.mode === 'server' && r.ok) exportMsg.innerHTML = `已保存到 Mac：<b style="color:#7ee2a8">${esc(r.text)}</b>（${size}）`;
+  else if (r.mode === 'server') bad(`服务器拒绝 HTTP ${r.status}：${esc(r.text)}`);
+  else if (r.mode === 'share' && r.ok) ok(`${why}（GitHub Pages / 静态站），已用系统共享发送 <b>${esc(name)}</b>（${size}）——AirDrop 到 Mac 或存到「文件」。`);
+  else if (r.mode === 'share') bad('已取消共享；可再点一次，或展开下方手动复制 JSON。');
+  else if (r.mode === 'download') ok(`${why}，已改为下载 <b>${esc(name)}</b>（${size}）——${where}。`);
+  else if (r.mode === 'clipboard') ok(`${why}，已复制 JSON 到剪贴板（${size}）——通用剪贴板可直接在 Mac 粘贴。`);
+  else bad(`${why}，且无可用导出通道：请展开下方「查看 / 手动复制 JSON」全选复制（通用剪贴板可直接在 Mac 粘贴）。局域网联调请确认 Mac 上以 <code>node server.js 8642 --lan</code> 启动。`);
 });
 $('btnCopy').addEventListener('click', async () => {
   if (!jsonOut.value) jsonOut.value = JSON.stringify(snapshot(), null, 2);

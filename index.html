@@ -89,9 +89,12 @@
           <button id="btnExportSamples">导出手写样本</button>
           <span id="exportStatus" class="status"></span>
         </div>
+        <!-- 链接一律页面相对：站点可能在子路径下（GitHub Pages 项目站 https://<user>.github.io/bimo/）。
+             docs 链接在 Pages 上会以原文（.md）打开或下载；发布后可换成仓库 blob 链接
+             （data-blob-href 里的占位，填好 <user> 后把 href 换成它）。 -->
         <p class="hint links">
-          <a href="/probe.html" target="_blank" rel="noopener">iPad 探针页 /probe.html</a> ·
-          <a href="docs/ipad-setup.md" target="_blank" rel="noopener">iPad 设置说明 docs/ipad-setup.md</a>
+          <a href="probe.html" target="_blank" rel="noopener">iPad 探针页 probe.html</a> ·
+          <a href="docs/ipad-setup.md" data-blob-href="https://github.com/<user>/bimo/blob/main/docs/ipad-setup.md" target="_blank" rel="noopener">iPad 设置说明 docs/ipad-setup.md</a>
         </p>
       </section>
     </aside>

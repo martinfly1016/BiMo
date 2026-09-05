@@ -3,6 +3,7 @@ import { Paper } from './paper.js';
 import { Player } from './player.js';
 import { YONG_STROKES } from './strokes.js';
 import { PenInput } from './input.js';
+import { probeServer, noServerReason, isTouchDevice } from './export-fallback.js';
 
 const stage = document.getElementById('stage');
 const paperCanvas = document.getElementById('paperCanvas');
@@ -214,19 +215,44 @@ ui.poseAlt0.addEventListener('input', showPoseVals);
 ui.poseGain.addEventListener('input', showPoseVals);
 showPoseVals();
 
-// 导出手写样本 → POST /save-json（端点由 server.js 提供；旧进程未重启时 404，提示即可）
-ui.btnExportSamples.addEventListener('click', async () => {
+// 导出手写样本：本地 node server.js 有 POST save-json → 写 exports/；纯静态站（GitHub Pages）无端点时
+// 走 js/export-fallback.js 回退链（系统共享 → 下载 → 剪贴板/页面文本）。
+// iPad（触屏 + Web Share）：页面加载时先探测一次端点，点击时已知无服务器就直接 share（Safari 要求 share 在
+// 手势的同步链路里，fetch 之后再 share 会被拒）。桌面：不探测、不 share——先 POST，失败即下载。
+probeServer('save-json');
+const showExportStatus = (text, level) => {
   const st = ui.exportStatus;
+  st.className = 'status' + (level === 'ok' ? ' ok' : level === 'err' ? ' err' : '');
+  st.textContent = text;
+};
+// 最后手段：在面板里显示可全选的 JSON 文本
+function showExportText(text) {
+  let ta = document.getElementById('exportText');
+  if (!ta) {
+    ta = document.createElement('textarea');
+    ta.id = 'exportText'; ta.readOnly = true; ta.spellcheck = false;
+    ui.exportStatus.parentElement.insertAdjacentElement('afterend', ta);
+  }
+  ta.value = text || ''; ta.hidden = false; ta.focus(); ta.select();
+}
+ui.btnExportSamples.addEventListener('click', async () => {
   const n = input.strokes.length;
-  if (!n) { st.className = 'status err'; st.textContent = '还没有录到笔画'; return; }
-  st.className = 'status'; st.textContent = `上传 ${n} 笔…`;
+  if (!n) { showExportStatus('还没有录到笔画', 'err'); return; }
+  showExportStatus(`导出 ${n} 笔…`);
   ui.btnExportSamples.disabled = true;
   try {
-    const r = await input.exportToServer('pen-samples');
-    if (r.ok) { st.className = 'status ok'; st.textContent = `已存 ${r.text}（${n} 笔，${(r.bytes / 1024).toFixed(0)} KB）`; }
-    else if (r.status === 404) { st.className = 'status err'; st.textContent = '服务器无 /save-json：请重启 node server.js 后再试（JSON 已打印到控制台）'; console.log('[bimo] pen samples', input.export()); }
-    else if (r.status === 0) { st.className = 'status err'; st.textContent = '网络错误：' + r.text; }
-    else { st.className = 'status err'; st.textContent = `HTTP ${r.status}: ${r.text}`; }
+    // 注意：exportToServer 内部到 navigator.share 之前不能有 await，这里也不能——手势链路要连着
+    const r = await input.exportToServer('pen-samples', showExportStatus);
+    const kb = (r.bytes / 1024).toFixed(0);
+    const why = noServerReason(r);   // 无导出服务器 / 端点返回 HTTP 403 / 连不上导出服务器
+    const where = isTouchDevice() ? 'iPad 在「文件」App 的「下载」里' : '在浏览器的「下载」文件夹';
+    if (r.mode === 'server' && r.ok) showExportStatus(`已存 ${r.text}（${n} 笔，${kb} KB）`, 'ok');
+    else if (r.mode === 'server') showExportStatus(`服务器拒绝 HTTP ${r.status}: ${r.text}`, 'err');
+    else if (r.mode === 'share' && r.ok) showExportStatus(`${why}，已用系统共享发送 ${r.name}（${n} 笔，${kb} KB）——AirDrop 到 Mac 或存到「文件」`, 'ok');
+    else if (r.mode === 'share') showExportStatus('已取消共享（JSON 未导出）', 'err');
+    else if (r.mode === 'download') showExportStatus(`${why}，已改为下载 ${r.name}（${n} 笔，${kb} KB）——${where}`, 'ok');
+    else if (r.mode === 'clipboard') showExportStatus(`${why}，已复制 JSON 到剪贴板（${n} 笔，${kb} KB）`, 'ok');
+    else { showExportStatus(`${why}，且无可用导出通道：JSON 已显示在下方，可全选复制`, 'err'); showExportText(r.text); }
   } finally {
     ui.btnExportSamples.disabled = false;
   }

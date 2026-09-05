@@ -175,3 +175,5 @@ button:disabled { opacity: 0.45; cursor: default; }
 .status { font-size: 11px; color: #8a8478; line-height: 1.4; word-break: break-all; }
 .status.ok { color: #8fbf7f; }
 .status.err { color: #ff9c8f; }
+/* 导出最后手段：可全选复制的 JSON 文本（main.js showExportText 按需创建） */
+#exportText { width: 100%; height: 90px; margin-bottom: 8px; font: 10px/1.3 ui-monospace, Menlo, monospace; resize: vertical; }

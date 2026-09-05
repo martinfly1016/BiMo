@@ -2,9 +2,19 @@
 // 方法论（①点验证有效）：Moore 边界追踪 → 等距重采样 → 窗口转角 → 角点计数/着色。
 // 真迹角点结构是笔法特征的数学形态：如①点=3角点（入锋尖/腹尾交界/尾尖）+其余曲率连续。
 // 注意：refStrokes[k] 是最近笔画切分，交叠区（②与④⑤、⑤与②③）有假轮廓/假角点，看图人工甄别。
+// 用法：先 await import('./eval-harness.js')，再 await import('./contour-tools.js')（页面相对）。
+// 出图存盘走 __H.savePng：本地 server.js → exports/export-<ts>.png；无服务器（GitHub Pages）→ 浏览器下载
+// （js/export-fallback.js），返回值 file 为 'download:<文件名>'、mode 标明通道。
 (() => {
   const H = window.__H;
   const N = H.N;
+  if (typeof H.savePng !== 'function') throw new Error('先 await import(\'./eval-harness.js\')（需要 __H.savePng）');
+  // 存 dataURL 为 PNG；返回 { file, mode }：server → 'exports/…'，其他 → '<mode>:<文件名>'
+  const savePanel = async (url, fileName) => {
+    const r = await H.savePng(url, fileName);
+    if (!r.ok) throw new Error(`保存 ${fileName} 失败（${r.mode}${r.status ? ' HTTP ' + r.status : ''}）：${r.text || ''}`);
+    return { file: r.mode === 'server' ? r.text : r.mode + ':' + r.name, mode: r.mode };
+  };
 
   // 最大连通域（BFS），去掉切分产生的远处碎片
   H.cc = (m) => {
@@ -179,8 +189,8 @@
   // 一步到位：第 k 笔（0 基）真迹切分 vs 我方，出图存盘 + 返回角点报告
   H.strokeContour = async (k, opts = {}) => {
     const { url, report } = H.contourPanel(H.refStrokes[k], H.ours[k], `真迹 第${k + 1}笔`, `我方 第${k + 1}笔`, opts);
-    const resp = await fetch('/save-png', { method: 'POST', body: url });
-    return { file: await resp.text(), corners: report };
+    const { file, mode } = await savePanel(url, `contour-s${k + 1}-${Date.now()}.png`);
+    return { file, mode, corners: report };
   };
 
   // 窗口裁剪（gu 坐标矩形）：切分掩膜在交叠区有假轮廓，改从整字掩膜裁"该笔独占区域"
@@ -199,8 +209,8 @@
     const tm = H.cropMask(H.truthWhole, gx0, gy0, gx1, gy1);
     const om = H.cropMask(H.ours[k], gx0, gy0, gx1, gy1);
     const { url, report } = H.contourPanel(tm, om, `真迹·${tag}`, `我方·${tag}`, opts);
-    const resp = await fetch('/save-png', { method: 'POST', body: url });
-    return { file: await resp.text(), corners: report };
+    const { file, mode } = await savePanel(url, `contour-${String(tag).replace(/[\\/:*?"<>|\s]+/g, '_')}-${Date.now()}.png`);
+    return { file, mode, corners: report };
   };
 
   // 竖向宽度剖面：每行追踪主 run（与上一行中心最近），输出左右缘与宽度随 y 的变化

@@ -4,12 +4,20 @@
 
 ## 运行
 
+纯静态页面，无构建步骤。两种方式：
+
 ```bash
+# 方式一：自带的零依赖服务器（多出 POST /save-json、/save-png 端点，导出直接写进 exports/）
+node server.js 8642            # 打开 http://localhost:8642
+node server.js 8642 --lan      # 监听局域网，iPad 真机联调（见 docs/ipad-setup.md）
+
+# 方式二：任意静态服务器（没有 /save-* 端点；「导出」改走系统共享 / 浏览器下载，见 js/export-fallback.js）
 python3 -m http.server 8642
-# 打开 http://localhost:8642
 ```
 
-（纯静态页面，无构建步骤；任何静态服务器均可。）
+导出回退链的平台行为：iPad（触屏 + Web Share）无服务器时弹系统共享面板（AirDrop / 存到「文件」）；桌面浏览器一律不弹面板、直接下载到「下载」文件夹。只有 `server.js` 自己的 400/413 拒绝才红字报告，其余非 2xx（GitHub Pages 405、http.server 501、旧版 server.js 404、CDN 403…）都照常回退。
+
+在线版（GitHub Pages 项目站点，所有链接与资源都是相对路径，子路径下可用）：https://martinfly1016.github.io/BiMo/
 
 ## 架构
 
