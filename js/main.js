@@ -2,6 +2,7 @@ import { Brush } from './brush.js';
 import { Paper } from './paper.js';
 import { Player } from './player.js';
 import { YONG_STROKES } from './strokes.js';
+import { PenInput } from './input.js';
 
 const stage = document.getElementById('stage');
 const paperCanvas = document.getElementById('paperCanvas');
@@ -9,13 +10,24 @@ const inkCanvas = document.getElementById('inkCanvas');
 const overlayCanvas = document.getElementById('overlayCanvas');
 
 let SIZE = 600;
-let paper, brush, player;
+let paper, brush, player, input;
 const inkCtx = inkCanvas.getContext('2d');
 const overlayCtx = overlayCanvas.getContext('2d');
 
-function setup() {
+// 画布尺寸 = min(可用尺寸×0.94, 600)。brush 常量是绝对像素，600 是评估口径（沙箱 RSIZE），
+// 大屏（iPad 13"）不再放大到 900+ 让笔宽相对变细。URL ?size=N 可覆盖（调试/对照用）。
+const URL_SIZE = (() => {
+  const v = parseInt(new URLSearchParams(location.search).get('size'), 10);
+  return Number.isFinite(v) && v >= 100 && v <= 4096 ? v : 0;
+})();
+function targetSize() {
+  if (URL_SIZE) return URL_SIZE;
   const rect = stage.getBoundingClientRect();
-  const size = Math.floor(Math.min(rect.width, rect.height) * 0.94);
+  return Math.min(600, Math.floor(Math.min(rect.width, rect.height) * 0.94));
+}
+
+function setup() {
+  const size = targetSize();
   if (!size || size < 50) { setTimeout(setup, 250); return; } // 布局未就绪（如后台标签页），稍后重试
   SIZE = size;
   for (const c of [paperCanvas, inkCanvas, overlayCanvas]) {
@@ -61,6 +73,15 @@ const ui = {
   basePressure: document.getElementById('basePressure'),
   inkFill: document.getElementById('inkFill'),
   chips: document.getElementById('strokeChips'),
+  poseLink: document.getElementById('poseLink'),
+  poseAlt0: document.getElementById('poseAlt0'),
+  poseAlt0Val: document.getElementById('poseAlt0Val'),
+  poseGain: document.getElementById('poseGain'),
+  poseGainVal: document.getElementById('poseGainVal'),
+  btnExportSamples: document.getElementById('btnExportSamples'),
+  exportStatus: document.getElementById('exportStatus'),
+  btnPanel: document.getElementById('btnPanel'),
+  penHud: document.getElementById('penHud'),
 };
 const strokeInfo = document.getElementById('strokeInfo');
 const strokeName = document.getElementById('strokeName');
@@ -73,6 +94,7 @@ YONG_STROKES.forEach((s, i) => {
   b.title = s.name;
   b.addEventListener('click', () => {
     if (!player || player.playing) return;
+    input?.abort();                 // 手写进行中：先收笔，播放器才能接管 brush
     ui.btnDemo.textContent = '⏸ 书写中…';
     setChipsActive(i);
     player.playOne(i);
@@ -97,13 +119,15 @@ ui.btnDemo.addEventListener('click', () => {
     player.stop();
     return;
   }
+  input?.abort();                   // 手写进行中：先收笔，播放器才能接管 brush
   clearInk();
   ui.btnDemo.textContent = '⏸ 停止书写';
   player.playAll();
 });
 
 ui.btnDip.addEventListener('click', () => { brush?.dip(); updateInkBar(); });
-ui.btnClear.addEventListener('click', clearInk);
+// 清纸时若正在手写：先收笔再清，否则 brush._path 还在，下一个样本会把这一笔重画回来
+ui.btnClear.addEventListener('click', () => { input?.abort(); clearInk(); });
 
 ui.speed.addEventListener('input', () => { if (player) player.speed = parseFloat(ui.speed.value); });
 ui.brushSize.addEventListener('input', () => {
@@ -167,51 +191,52 @@ function drawOverlay() {
   }
 }
 
-// ---------- 手写输入 ----------
-let drawing = false;
-let lastPointer = null;
-
-overlayCanvas.addEventListener('pointerdown', e => {
-  if (!player || player.playing) return;
-  overlayCanvas.setPointerCapture(e.pointerId);
-  drawing = true;
-  const pos = eventPos(e);
-  lastPointer = { ...pos, t: e.timeStamp };
-  brush.begin(pos.x, pos.y, pointerPressure(e, 0));
+// ---------- 手写输入（js/input.js） ----------
+// brush/paper 在 setup() 里会重建（resize），所以给 PenInput 的是 getter。
+input = new PenInput(overlayCanvas, {
+  brush: () => brush,
+  paper: () => paper,
+  inkCtx: () => inkCtx,
+  busy: () => !player || player.playing,
+  onFrame: () => { if (brush) { drawOverlay(); updateInkBar(); } },
+  basePressure: () => parseFloat(ui.basePressure.value),
+  poseOn: () => ui.poseLink.checked,
+  alt0Deg: () => parseFloat(ui.poseAlt0.value),
+  gain: () => parseFloat(ui.poseGain.value),
+  hud: ui.penHud,
 });
 
-overlayCanvas.addEventListener('pointermove', e => {
-  if (!drawing) return;
-  const pos = eventPos(e);
-  const dt = Math.max(1, e.timeStamp - lastPointer.t);
-  const speed = Math.hypot(pos.x - lastPointer.x, pos.y - lastPointer.y) / dt; // px/ms
-  brush.move(pos.x, pos.y, pointerPressure(e, speed), inkCtx, paper, speed * 1000);
-  lastPointer = { ...pos, t: e.timeStamp };
-  drawOverlay();
-  updateInkBar();
-});
-
-const endStroke = e => {
-  if (!drawing) return;
-  drawing = false;
-  brush.end();
-  drawOverlay();
+const showPoseVals = () => {
+  ui.poseAlt0Val.textContent = parseFloat(ui.poseAlt0.value).toFixed(0) + '°';
+  ui.poseGainVal.textContent = parseFloat(ui.poseGain.value).toFixed(1);
 };
-overlayCanvas.addEventListener('pointerup', endStroke);
-overlayCanvas.addEventListener('pointercancel', endStroke);
+ui.poseAlt0.addEventListener('input', showPoseVals);
+ui.poseGain.addEventListener('input', showPoseVals);
+showPoseVals();
 
-function eventPos(e) {
-  const r = overlayCanvas.getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
-}
+// 导出手写样本 → POST /save-json（端点由 server.js 提供；旧进程未重启时 404，提示即可）
+ui.btnExportSamples.addEventListener('click', async () => {
+  const st = ui.exportStatus;
+  const n = input.strokes.length;
+  if (!n) { st.className = 'status err'; st.textContent = '还没有录到笔画'; return; }
+  st.className = 'status'; st.textContent = `上传 ${n} 笔…`;
+  ui.btnExportSamples.disabled = true;
+  try {
+    const r = await input.exportToServer('pen-samples');
+    if (r.ok) { st.className = 'status ok'; st.textContent = `已存 ${r.text}（${n} 笔，${(r.bytes / 1024).toFixed(0)} KB）`; }
+    else if (r.status === 404) { st.className = 'status err'; st.textContent = '服务器无 /save-json：请重启 node server.js 后再试（JSON 已打印到控制台）'; console.log('[bimo] pen samples', input.export()); }
+    else if (r.status === 0) { st.className = 'status err'; st.textContent = '网络错误：' + r.text; }
+    else { st.className = 'status err'; st.textContent = `HTTP ${r.status}: ${r.text}`; }
+  } finally {
+    ui.btnExportSamples.disabled = false;
+  }
+});
 
-// 触控笔用真实压感；鼠标用"运笔快慢"模拟提按：慢按则重，快提则轻
-function pointerPressure(e, speed) {
-  if (e.pointerType === 'pen' && e.pressure > 0) return e.pressure;
-  const base = parseFloat(ui.basePressure.value);
-  const speedLift = Math.min(0.75, speed * 0.55);
-  return Math.max(0.05, base - speedLift);
-}
+// 面板折叠：iPad 上腾出书写空间。布局变化后按新可用尺寸重排（尺寸没变则不动画布）
+ui.btnPanel.addEventListener('click', () => {
+  document.getElementById('app').classList.toggle('panel-hidden');
+  relayout();
+});
 
 // ---------- 启动 ----------
 setup();
@@ -222,12 +247,14 @@ window.__bimo = {
   get player() { return player; },
   get paper() { return paper; },
   get inkCtx() { return inkCtx; },
+  get input() { return input; },
   drawOverlay,
 };
-window.addEventListener('resize', () => {
-  const rect = stage.getBoundingClientRect();
-  const newSize = Math.floor(Math.min(rect.width, rect.height) * 0.94);
+
+function relayout() {
+  const newSize = targetSize();
   if (!newSize || newSize === SIZE) return; // 面板显隐切换等假 resize，不动画布
+  input?.abort();                           // 手写进行中：先收笔落墨，再重建 brush（否则这一笔静默丢失）
   if (player?.playing) player.stop();
 
   // 尺寸真变了：把已写的墨迹按比例搬到新画布，保留笔中墨量
@@ -240,4 +267,5 @@ window.addEventListener('resize', () => {
   brush.ink = oldInk;
   inkCtx.drawImage(old, 0, 0, SIZE, SIZE);
   updateInkBar();
-});
+}
+window.addEventListener('resize', relayout);

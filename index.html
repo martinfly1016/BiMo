@@ -2,7 +2,9 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>笔墨 · 毛笔书写工作台</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -10,6 +12,7 @@
 <div id="app">
   <header>
     <h1>笔墨 <span class="sub">BIMO · 毛笔物理书写工作台</span></h1>
+    <button id="btnPanel" class="ghost" title="折叠 / 展开面板" aria-label="折叠或展开面板">☰</button>
   </header>
 
   <main>
@@ -21,6 +24,7 @@
         <div id="strokeName"></div>
         <div id="strokeTech"></div>
       </div>
+      <div id="penHud">待笔</div>
     </div>
 
     <aside id="panel">
@@ -68,10 +72,27 @@
 
       <section>
         <h2>手写</h2>
-        <p class="hint">直接在纸上用鼠标或触控笔书写。触控笔支持真实压感；鼠标书写时压力由运笔快慢模拟——慢按则重，快提则轻。</p>
+        <p class="hint">直接在纸上用 Apple Pencil 或鼠标书写（手指触摸不落墨）。Pencil 用真实压感与倾角；鼠标书写时压力由运笔快慢模拟——慢按则重，快提则轻。</p>
+        <label class="checkRow">
+          <input type="checkbox" id="poseLink" checked> 姿态直连（Pencil）
+        </label>
+        <label>中锋零点 alt₀ <span class="val" id="poseAlt0Val">55°</span>
+          <input type="range" id="poseAlt0" min="30" max="85" step="1" value="55">
+        </label>
+        <label>倾角增益 <span class="val" id="poseGainVal">1.2</span>
+          <input type="range" id="poseGain" min="0" max="3" step="0.1" value="1.2">
+        </label>
         <label>鼠标基准压力
           <input type="range" id="basePressure" min="0.2" max="1" step="0.05" value="0.65">
         </label>
+        <div class="btnRow">
+          <button id="btnExportSamples">导出手写样本</button>
+          <span id="exportStatus" class="status"></span>
+        </div>
+        <p class="hint links">
+          <a href="/probe.html" target="_blank" rel="noopener">iPad 探针页 /probe.html</a> ·
+          <a href="docs/ipad-setup.md" target="_blank" rel="noopener">iPad 设置说明 docs/ipad-setup.md</a>
+        </p>
       </section>
     </aside>
   </main>

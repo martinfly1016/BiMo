@@ -8,23 +8,39 @@
   --line: #3a352f;
 }
 
+html { height: 100%; }
 body {
   background: var(--bg);
   color: var(--ink);
   font-family: "Songti SC", "STSong", "SimSun", serif;
   height: 100vh;
+  height: 100dvh;                 /* iPad Safari：随地址栏显隐变化的真实视口高度 */
   overflow: hidden;
+  overscroll-behavior: none;      /* 手掌/边缘手势不触发橡皮筋滚动 */
+  -webkit-text-size-adjust: 100%;
 }
 
-#app { display: flex; flex-direction: column; height: 100vh; }
+#app {
+  display: flex; flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
 header {
   padding: 10px 20px;
   border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
 }
 header h1 { font-size: 20px; letter-spacing: 4px; }
 header .sub { font-size: 12px; color: #8a8478; letter-spacing: 1px; margin-left: 10px; }
+button.ghost {
+  background: transparent; border-color: var(--line); color: #9a927f;
+  padding: 4px 10px; font-size: 15px; line-height: 1; letter-spacing: 0;
+  min-width: 36px; min-height: 30px;   /* 触控友好 */
+}
+#app.panel-hidden #panel { display: none; }
 
 main { display: flex; flex: 1 1 auto; min-height: 0; }
 
@@ -35,13 +51,33 @@ main { display: flex; flex: 1 1 auto; min-height: 0; }
   align-items: center;
   justify-content: center;
   min-width: 0;
+  touch-action: none;                 /* 手掌搁在画布外的舞台上也不滚动/缩放 */
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;        /* 长按不弹系统菜单 */
 }
 
 #stage canvas {
   position: absolute;
   touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
 }
 #overlayCanvas { cursor: crosshair; }
+
+/* 输入 HUD：DOM 元素（overlay canvas 每帧 clearRect，不能画在上面） */
+#penHud {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  font: 11px/1.55 ui-monospace, Menlo, Consolas, monospace;
+  white-space: pre;
+  color: #cfc8b8;
+  background: rgba(28, 26, 23, 0.82);
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+  pointer-events: none;
+  letter-spacing: 0;
+}
 
 #strokeInfo {
   position: absolute;
@@ -132,3 +168,10 @@ button:disabled { opacity: 0.45; cursor: default; }
 .checkRow input { accent-color: var(--accent); }
 
 .hint { font-size: 11px; line-height: 1.7; color: #8a8478; margin-bottom: 10px; }
+.hint.links a { color: #bdb5a5; text-decoration: underline dotted; }
+.hint.links a:hover { color: #ff9c8f; }
+#panel label .val { float: right; color: #9a927f; font-variant-numeric: tabular-nums; }
+.btnRow { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.status { font-size: 11px; color: #8a8478; line-height: 1.4; word-break: break-all; }
+.status.ok { color: #8fbf7f; }
+.status.err { color: #ff9c8f; }
