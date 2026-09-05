@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111418">
+<title>笔墨 · iPad 输入探针</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #111418; color: #e8e8e8; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    -webkit-text-size-adjust: 100%;
+    overscroll-behavior: none;
+  }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  h1 small { font-weight: 400; color: #9aa4b2; font-size: 14px; margin-left: 6px; }
+  #padWrap { position: relative; }
+  #pad {
+    display: block; width: 100%; height: 44vh; min-height: 260px;
+    background: #1a1f27; border: 1px solid #333a45; border-radius: 12px;
+    touch-action: none;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    cursor: crosshair;
+  }
+  #padHint {
+    position: absolute; left: 12px; top: 10px; right: 12px; pointer-events: none;
+    color: #9aa4b2; font-size: 14px; line-height: 1.4;
+  }
+  #padHint b { color: #ffd479; font-weight: 600; }
+  #controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 8px; }
+  button {
+    min-height: 46px; padding: 8px 16px; font-size: 16px; font-weight: 600;
+    border: 0; border-radius: 10px; color: #fff; background: #2d6cdf; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button.secondary { background: #3a4250; }
+  button.warn { background: #b4552d; }
+  button:disabled { opacity: .5; }
+  #status {
+    min-height: 26px; padding: 6px 10px; border-radius: 8px; background: #1a1f27;
+    color: #ffd479; font-size: 15px; margin-bottom: 10px;
+  }
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
+  .card { background: #1a1f27; border: 1px solid #2a313c; border-radius: 12px; padding: 10px 12px; }
+  .card h2 { font-size: 15px; margin: 0 0 6px; color: #9fc5ff; font-weight: 600; letter-spacing: .02em; }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 1px dashed #2a313c; font-size: 14px; }
+  .row:first-of-type { border-top: 0; }
+  .row .k { color: #b8c0cc; flex: 0 1 58%; }
+  .row .v { color: #fff; text-align: right; font-variant-numeric: tabular-nums; word-break: break-all; }
+  .v.ok { color: #7ee2a8; } .v.bad { color: #ff8a80; } .v.dim { color: #8b94a3; }
+  .hist { display: flex; align-items: flex-end; gap: 2px; height: 46px; margin: 6px 0 2px; }
+  .hist div { flex: 1; background: #2d6cdf; min-height: 1px; border-radius: 2px 2px 0 0; }
+  .hist.lat div { background: #b4552d; }
+  .histLabel { display: flex; justify-content: space-between; font-size: 12px; color: #8b94a3; }
+  .ua { font-size: 12px; color: #8b94a3; word-break: break-all; margin-top: 4px; }
+  #exportBox { margin-top: 12px; }
+  #exportMsg { font-size: 15px; margin: 6px 0; min-height: 22px; }
+  #jsonOut {
+    width: 100%; height: 160px; background: #0d1015; color: #cfd6e0; border: 1px solid #2a313c;
+    border-radius: 8px; font: 12px/1.4 ui-monospace, Menlo, monospace; padding: 8px; resize: vertical;
+  }
+  details summary { cursor: pointer; color: #9aa4b2; font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>笔墨 · iPad 输入探针 <small>probe.html · 不依赖 js/ 模块</small></h1>
+</header>
+
+<div id="padWrap">
+  <canvas id="pad"></canvas>
+  <div id="padHint">书写区（touch-action:none）。<b>用 Apple Pencil 按平常姿势写 10 笔横竖</b>，倾角分布持续统计；点「开始 10 秒采样」得到干净的窗口数据。</div>
+</div>
+
+<div id="controls">
+  <button id="btnWindow">开始 10 秒采样</button>
+  <button id="btnPosture" class="secondary">静握 2 秒</button>
+  <button id="btnReset" class="secondary">清零并连续采集</button>
+  <button id="btnClear" class="secondary">清空画布</button>
+  <button id="btnExport" class="warn">导出结果</button>
+</div>
+<div id="status">连续采集中。先随手写几笔看统计是否跳动，再点「开始 10 秒采样」。</div>
+
+<main id="stats"></main>
+
+<section id="exportBox">
+  <div id="exportMsg"></div>
+  <details>
+    <summary>查看 / 手动复制 JSON</summary>
+    <textarea id="jsonOut" readonly spellcheck="false"></textarea>
+    <div style="margin-top:6px"><button id="btnCopy" class="secondary">复制 JSON</button></div>
+  </details>
+</section>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const DEG = 180 / Math.PI;
+const now = () => performance.now();
+
+// ---------- 统计小工具 ----------
+function quantile(sorted, p) {
+  const n = sorted.length; if (!n) return null;
+  const i = (n - 1) * p, lo = Math.floor(i), hi = Math.ceil(i);
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (i - lo);
+}
+function sortedCopy(a) { return a.slice().sort((x, y) => x - y); }
+function mean(a) { return a.length ? a.reduce((s, v) => s + v, 0) / a.length : null; }
+function std(a) { if (a.length < 2) return null; const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); }
+// 方位角是圆量：用平均合向量 R 算圆均值与圆标准差 sqrt(-2 ln R)
+function circStats(rad) {
+  if (!rad.length) return { mean: null, std: null };
+  let c = 0, s = 0; for (const r of rad) { c += Math.cos(r); s += Math.sin(r); }
+  c /= rad.length; s /= rad.length;
+  const R = Math.min(1, Math.hypot(c, s));
+  return { mean: Math.atan2(s, c), std: R > 0 ? Math.sqrt(-2 * Math.log(R)) : null };
+}
+function summary(a, scale) {
+  if (!a.length) return { n: 0 };
+  const s = sortedCopy(a), k = scale || 1;
+  return { n: s.length, min: s[0] * k, q1: quantile(s, .25) * k, median: quantile(s, .5) * k, q3: quantile(s, .75) * k, max: s[s.length - 1] * k, mean: mean(s) * k };
+}
+// 有上限的样本池：满了随机替换（reservoir），保持无偏
+function pool(cap) {
+  return { a: [], seen: 0, cap, push(v) { this.seen++; if (this.a.length < this.cap) this.a.push(v); else { const j = Math.floor(Math.random() * this.seen); if (j < this.cap) this.a[j] = v; } } };
+}
+const fmt = (v, d = 2) => v == null || Number.isNaN(v) ? '—' : (typeof v === 'number' ? v.toFixed(d) : String(v));
+const yn = v => v == null ? '—' : v ? '是' : '否';
+
+// ---------- 画布 ----------
+const pad = $('pad');
+const ctx = pad.getContext('2d');
+function fitCanvas() {
+  const r = pad.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  pad.width = Math.max(1, Math.round(r.width * dpr));
+  pad.height = Math.max(1, Math.round(r.height * dpr));
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+}
+fitCanvas();
+window.addEventListener('resize', fitCanvas);
+function localPos(ev) { const r = pad.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
+
+// ---------- 结果容器 ----------
+const feat = {
+  PointerEvent: 'PointerEvent' in window,
+  getCoalescedEvents: !!(window.PointerEvent && 'getCoalescedEvents' in PointerEvent.prototype),
+  getPredictedEvents: !!(window.PointerEvent && 'getPredictedEvents' in PointerEvent.prototype),
+  altitudeAngle: !!(window.PointerEvent && 'altitudeAngle' in PointerEvent.prototype),
+  azimuthAngle: !!(window.PointerEvent && 'azimuthAngle' in PointerEvent.prototype),
+  pointerrawupdate: 'onpointerrawupdate' in window,
+  TouchEvent: 'TouchEvent' in window,
+  touchAltitudeAngle: !!(window.Touch && 'altitudeAngle' in Touch.prototype),
+  touchAzimuthAngle: !!(window.Touch && 'azimuthAngle' in Touch.prototype),
+  touchType: !!(window.Touch && 'touchType' in Touch.prototype),
+  touchForce: !!(window.Touch && 'force' in Touch.prototype),
+  canvasFilter: 'filter' in ctx,
+  OffscreenCanvas: 'OffscreenCanvas' in window,
+  mediaHover: matchMedia('(hover: hover)').matches,
+  mediaPointerFine: matchMedia('(pointer: fine)').matches,
+  mediaAnyPointerFine: matchMedia('(any-pointer: fine)').matches,
+};
+const env = () => ({
+  userAgent: navigator.userAgent,
+  platform: navigator.platform,
+  maxTouchPoints: navigator.maxTouchPoints,
+  screen: { width: screen.width, height: screen.height, orientation: screen.orientation && screen.orientation.type },
+  inner: { width: window.innerWidth, height: window.innerHeight },
+  devicePixelRatio: window.devicePixelRatio,
+  visualViewportScale: window.visualViewport ? window.visualViewport.scale : null,
+  standalone: !!navigator.standalone,
+  timeOrigin: performance.timeOrigin,
+});
+
+function freshWindow() {
+  return {
+    active: false, frozen: false, startedAt: null, seconds: 0,
+    frames: 0, frameIntervals: pool(2000),
+    events: { down: 0, move: 0, up: 0, cancel: 0 },
+    pointerTypes: {},
+    penMovesInContact: 0, penMoves: 0, contactSeconds: 0, strokes: 0,
+    coalesced: { supported: null, events: 0, sumLen: 0, empty: 0, maxLen: 0, intervals: pool(4000) },
+    predicted: { supported: null, events: 0, sumLen: 0, empty: 0, maxLen: 0 },
+    firstPenDownPressure: null, firstPenDown: null,
+    samples: 0, zeroPressure: 0, pressureHist: new Array(10).fill(0), pressureVals: pool(4000),
+    clientX: { fractional: 0, total: 0 },
+    altAz: { present: null, altitude: pool(4000), azimuth: pool(4000) },
+    tilt: { present: null, tiltX: pool(2000), tiltY: pool(2000) },
+    twist: { present: null, nonzero: 0, max: 0 },
+    tangentialPressure: { present: null, min: null, max: null },
+    contact: { widthMin: null, widthMax: null, heightMin: null, heightMax: null },
+    buttonsSeen: {}, buttonSeen: {},
+    latency: { vals: pool(4000), hist: new Array(10).fill(0), negative: 0 },
+    hover: { moves: 0, ids: {}, enterLeave: 0 },
+    pointerIds: { down: [], contact: {}, distinct: 0 },
+    palm: { touchEventsDuringPen: 0, nonStylusTouchesDuringPen: 0, touchPointerDownsDuringPen: 0, touchPointerMovesDuringPen: 0 },
+    touchExt: { touchstarts: 0, touchmoves: 0, hasAltitude: null, hasAzimuth: null, hasTouchType: null, hasForce: null, touchTypes: {}, altitudeSample: null },
+  };
+}
+const R = {
+  win: freshWindow(),
+  continuous: true,
+  grip: { altitude: pool(20000), azimuth: pool(20000), tiltX: pool(20000), tiltY: pool(20000), pressure: pool(20000), strokes: 0 },
+  posture: null,
+  rafLive: { stamps: [], hz: null },
+};
+const recording = () => R.win.active || R.continuous;
+
+// ---------- 指针状态 ----------
+let penDown = false, penDownAt = 0, penDownId = null, penLast = null;
+let anyDrawing = false, drawLast = null;
+let postureCollector = null; // {alt:[], az:[], tiltX:[], tiltY:[], pressure:[], n}
+
+function bump(o, k) { o[k] = (o[k] || 0) + 1; }
+function minmax(o, kmin, kmax, v) { if (typeof v !== 'number' || Number.isNaN(v)) return; if (o[kmin] == null || v < o[kmin]) o[kmin] = v; if (o[kmax] == null || v > o[kmax]) o[kmax] = v; }
+
+function ingestPenSample(s, inContact) {
+  const W = R.win;
+  W.samples++;
+  if (inContact) {
+    if (s.pressure === 0) W.zeroPressure++;
+    const b = Math.min(9, Math.max(0, Math.floor(s.pressure * 10)));
+    W.pressureHist[b]++;
+    W.pressureVals.push(s.pressure);
+    R.grip.pressure.push(s.pressure);
+  }
+  W.clientX.total++;
+  if (!Number.isInteger(s.clientX) || !Number.isInteger(s.clientY)) W.clientX.fractional++;
+
+  const hasAlt = typeof s.altitudeAngle === 'number' && typeof s.azimuthAngle === 'number';
+  if (W.altAz.present === null) W.altAz.present = hasAlt;
+  if (hasAlt) {
+    W.altAz.altitude.push(s.altitudeAngle); W.altAz.azimuth.push(s.azimuthAngle);
+    if (inContact) { R.grip.altitude.push(s.altitudeAngle); R.grip.azimuth.push(s.azimuthAngle); }
+  }
+  const hasTilt = typeof s.tiltX === 'number' && typeof s.tiltY === 'number';
+  if (W.tilt.present === null) W.tilt.present = hasTilt;
+  if (hasTilt) {
+    W.tilt.tiltX.push(s.tiltX); W.tilt.tiltY.push(s.tiltY);
+    if (inContact) { R.grip.tiltX.push(s.tiltX); R.grip.tiltY.push(s.tiltY); }
+  }
+  if (W.twist.present === null) W.twist.present = typeof s.twist === 'number';
+  if (typeof s.twist === 'number' && s.twist !== 0) { W.twist.nonzero++; W.twist.max = Math.max(W.twist.max, Math.abs(s.twist)); }
+  if (W.tangentialPressure.present === null) W.tangentialPressure.present = typeof s.tangentialPressure === 'number';
+  minmax(W.tangentialPressure, 'min', 'max', s.tangentialPressure);
+  minmax(W.contact, 'widthMin', 'widthMax', s.width);
+  minmax(W.contact, 'heightMin', 'heightMax', s.height);
+  bump(W.buttonsSeen, String(s.buttons));
+
+  if (postureCollector) {
+    postureCollector.n++;
+    if (hasAlt) { postureCollector.alt.push(s.altitudeAngle); postureCollector.az.push(s.azimuthAngle); }
+    if (hasTilt) { postureCollector.tiltX.push(s.tiltX); postureCollector.tiltY.push(s.tiltY); }
+    if (inContact) postureCollector.pressure.push(s.pressure);
+  }
+}
+
+// getCoalescedEvents 在合成（untrusted）事件上返回空数组：空则回退为 [e]
+function coalescedOf(e) {
+  const W = R.win.coalesced;
+  if (typeof e.getCoalescedEvents !== 'function') { if (W.supported === null) W.supported = false; return [e]; }
+  if (W.supported === null) W.supported = true;
+  let list; try { list = e.getCoalescedEvents(); } catch (err) { list = []; }
+  W.events++; W.sumLen += list.length; W.maxLen = Math.max(W.maxLen, list.length);
+  if (!list.length) { W.empty++; return [e]; }
+  for (let i = 1; i < list.length; i++) W.intervals.push(list[i].timeStamp - list[i - 1].timeStamp);
+  return list;
+}
+function predictedOf(e) {
+  const P = R.win.predicted;
+  if (typeof e.getPredictedEvents !== 'function') { if (P.supported === null) P.supported = false; return; }
+  if (P.supported === null) P.supported = true;
+  let list; try { list = e.getPredictedEvents(); } catch (err) { list = []; }
+  P.events++; P.sumLen += list.length; P.maxLen = Math.max(P.maxLen, list.length);
+  if (!list.length) P.empty++;
+}
+
+function drawSegment(from, to, pressure) {
+  ctx.strokeStyle = 'rgba(230,236,245,0.95)';
+  ctx.lineWidth = 0.8 + 3 * (pressure || 0.3);
+  ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+}
+
+pad.addEventListener('pointerdown', e => {
+  const W = R.win, rec = recording();
+  if (rec) { W.events.down++; bump(W.pointerTypes, e.pointerType); bump(W.buttonSeen, String(e.button)); }
+  try { pad.setPointerCapture(e.pointerId); } catch (err) {}
+  if (e.pointerType === 'pen') {
+    penDown = true; penDownAt = now(); penDownId = e.pointerId;
+    if (rec) {
+      if (W.firstPenDownPressure === null) {
+        W.firstPenDownPressure = e.pressure;
+        W.firstPenDown = { pressure: e.pressure, buttons: e.buttons, altitudeAngle: e.altitudeAngle, azimuthAngle: e.azimuthAngle, tiltX: e.tiltX, tiltY: e.tiltY, twist: e.twist, width: e.width, height: e.height, isPrimary: e.isPrimary };
+      }
+      if (W.pointerIds.down.length < 60) W.pointerIds.down.push(e.pointerId);
+      bump(W.pointerIds.contact, String(e.pointerId));
+      W.pointerIds.distinct = Object.keys(W.pointerIds.contact).length;
+      ingestPenSample(e, true);
+    }
+  } else if (e.pointerType === 'touch' && penDown && rec) {
+    W.palm.touchPointerDownsDuringPen++;
+  }
+  if (e.buttons & 1 || e.pointerType === 'touch') { anyDrawing = true; drawLast = localPos(e); }
+});
+
+pad.addEventListener('pointermove', e => {
+  const W = R.win, rec = recording(), t = now();
+  if (rec) { W.events.move++; bump(W.pointerTypes, e.pointerType); }
+  if (e.pointerType === 'pen') {
+    const inContact = (e.buttons & 1) !== 0;
+    R.rafLive.penMoveStamps = R.rafLive.penMoveStamps || [];
+    R.rafLive.penMoveStamps.push(t);
+    if (rec) {
+      W.penMoves++;
+      const lat = t - e.timeStamp;
+      if (lat < 0) W.latency.negative++;
+      W.latency.vals.push(lat);
+      W.latency.hist[Math.min(9, Math.max(0, Math.floor(Math.max(0, lat) / 2)))]++;
+      predictedOf(e);
+      const samples = coalescedOf(e);
+      if (inContact) W.penMovesInContact++;
+      else { W.hover.moves++; bump(W.hover.ids, String(e.pointerId)); }
+      for (const s of samples) ingestPenSample(s, (s.buttons & 1) !== 0);
+    } else if (postureCollector) {
+      // 冻结期间仍允许「静握」任务收样本
+      for (const s of coalescedOf(e)) { const c = (s.buttons & 1) !== 0; postureCollector.n++;
+        if (typeof s.altitudeAngle === 'number') { postureCollector.alt.push(s.altitudeAngle); postureCollector.az.push(s.azimuthAngle); }
+        if (typeof s.tiltX === 'number') { postureCollector.tiltX.push(s.tiltX); postureCollector.tiltY.push(s.tiltY); }
+        if (c) postureCollector.pressure.push(s.pressure); }
+    }
+    if (inContact && anyDrawing) {
+      const list = (typeof e.getCoalescedEvents === 'function' && e.getCoalescedEvents()) || [];
+      const pts = list.length ? list : [e];
+      for (const s of pts) { const p = localPos(s); if (drawLast) drawSegment(drawLast, p, s.pressure); drawLast = p; }
+    }
+  } else {
+    if (e.pointerType === 'touch' && penDown && rec) W.palm.touchPointerMovesDuringPen++;
+    if (anyDrawing && (e.buttons & 1 || e.pointerType === 'touch')) { const p = localPos(e); if (drawLast) drawSegment(drawLast, p, e.pressure || 0.3); drawLast = p; }
+  }
+});
+
+function endPointer(e, cancelled) {
+  const W = R.win, rec = recording();
+  if (rec) { if (cancelled) W.events.cancel++; else W.events.up++; bump(W.pointerTypes, e.pointerType); bump(W.buttonsSeen, String(e.buttons)); }
+  if (e.pointerType === 'pen' && penDown && e.pointerId === penDownId) {
+    penDown = false;
+    if (rec) { W.contactSeconds += (now() - penDownAt) / 1000; W.strokes++; }
+    R.grip.strokes++;
+  }
+  anyDrawing = false; drawLast = null;
+}
+pad.addEventListener('pointerup', e => endPointer(e, false));
+pad.addEventListener('pointercancel', e => endPointer(e, true));
+pad.addEventListener('pointerleave', e => { if (e.pointerType === 'pen' && recording()) R.win.hover.enterLeave++; });
+
+// Touch Events（WebKit 私有扩展：Touch.altitudeAngle / azimuthAngle / touchType）
+function onTouch(kind, e) {
+  if (!recording()) return;
+  const T = R.win.touchExt;
+  if (kind === 'start') T.touchstarts++; else T.touchmoves++;
+  const t = e.changedTouches && e.changedTouches[0];
+  if (!t) return;
+  if (T.hasAltitude === null) {
+    T.hasAltitude = 'altitudeAngle' in t; T.hasAzimuth = 'azimuthAngle' in t; T.hasTouchType = 'touchType' in t; T.hasForce = 'force' in t;
+  }
+  if ('touchType' in t) bump(T.touchTypes, String(t.touchType)); else bump(T.touchTypes, 'n/a');
+  if (T.altitudeSample === null && typeof t.altitudeAngle === 'number') T.altitudeSample = { altitudeAngle: t.altitudeAngle, azimuthAngle: t.azimuthAngle, force: t.force, touchType: t.touchType };
+  if (penDown) {
+    R.win.palm.touchEventsDuringPen++;
+    for (const c of e.changedTouches) if (c.touchType !== 'stylus') R.win.palm.nonStylusTouchesDuringPen++;
+  }
+}
+pad.addEventListener('touchstart', e => onTouch('start', e), { passive: true });
+pad.addEventListener('touchmove', e => onTouch('move', e), { passive: true });
+
+// ---------- rAF 频率 ----------
+let lastFrame = null;
+function frame(ts) {
+  const st = R.rafLive.stamps; st.push(ts);
+  while (st.length && ts - st[0] > 1000) st.shift();
+  R.rafLive.hz = st.length > 1 ? (st.length - 1) / ((ts - st[0]) / 1000) : null;
+  if (recording()) { R.win.frames++; if (lastFrame != null) R.win.frameIntervals.push(ts - lastFrame); }
+  lastFrame = ts;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// ---------- 任务：10 秒窗口 / 静握 / 清零 ----------
+const status = $('status');
+let windowTimer = null, windowTick = null;
+function startWindow() {
+  clearTimeout(windowTimer); clearInterval(windowTick);
+  R.win = freshWindow(); R.win.active = true; R.win.startedAt = now(); R.continuous = false; lastFrame = null;
+  $('btnWindow').disabled = true;
+  const t0 = now();
+  windowTick = setInterval(() => { status.textContent = `采样中… 剩余 ${Math.max(0, 10 - (now() - t0) / 1000).toFixed(1)} s。请用 Pencil 持续书写横竖。`; }, 100);
+  windowTimer = setTimeout(() => {
+    clearInterval(windowTick);
+    const W = R.win;
+    if (penDown) { W.contactSeconds += (now() - penDownAt) / 1000; penDownAt = now(); }
+    W.seconds = (now() - W.startedAt) / 1000; W.active = false; W.frozen = true;
+    $('btnWindow').disabled = false;
+    status.textContent = `10 秒窗口结束（已冻结）。pen 接触 ${W.contactSeconds.toFixed(1)} s / ${W.strokes} 笔。可继续「静握 2 秒」或「导出结果」；「清零并连续采集」恢复实时。`;
+    render();
+  }, 10000);
+}
+$('btnWindow').addEventListener('click', startWindow);
+
+$('btnReset').addEventListener('click', () => {
+  clearTimeout(windowTimer); clearInterval(windowTick);
+  R.win = freshWindow(); R.continuous = true; lastFrame = null;
+  R.grip = { altitude: pool(20000), azimuth: pool(20000), tiltX: pool(20000), tiltY: pool(20000), pressure: pool(20000), strokes: 0 };
+  R.posture = null; $('btnWindow').disabled = false;
+  status.textContent = '已清零，连续采集中。';
+  render();
+});
+
+$('btnPosture').addEventListener('click', () => {
+  const btn = $('btnPosture'); btn.disabled = true;
+  let prep = 3;
+  status.textContent = `准备 ${prep}… 请把笔尖轻放在书写区（或悬停），保持不动。`;
+  const prepTimer = setInterval(() => {
+    prep--;
+    if (prep > 0) { status.textContent = `准备 ${prep}… 请把笔尖轻放在书写区（或悬停），保持不动。`; return; }
+    clearInterval(prepTimer);
+    postureCollector = { alt: [], az: [], tiltX: [], tiltY: [], pressure: [], n: 0, startedAt: now() };
+    status.textContent = '记录中（2 秒）… 保持不动。';
+    setTimeout(() => {
+      const c = postureCollector; postureCollector = null; btn.disabled = false;
+      const az = circStats(c.az);
+      R.posture = {
+        samples: c.n, seconds: (now() - c.startedAt) / 1000,
+        altitudeStdDeg: std(c.alt) != null ? std(c.alt) * DEG : null,
+        altitudeMeanDeg: mean(c.alt) != null ? mean(c.alt) * DEG : null,
+        azimuthCircStdDeg: az.std != null ? az.std * DEG : null,
+        azimuthMeanDeg: az.mean != null ? az.mean * DEG : null,
+        tiltXStdDeg: std(c.tiltX), tiltYStdDeg: std(c.tiltY),
+        pressureStd: std(c.pressure), pressureMean: mean(c.pressure), contactSamples: c.pressure.length,
+      };
+      status.textContent = c.n ? `静握完成：${c.n} 个样本，altitude 抖动 σ=${fmt(R.posture.altitudeStdDeg)}°，azimuth σ=${fmt(R.posture.azimuthCircStdDeg)}°。` : '静握期间没有收到 pen 事件（笔完全不动时 Safari 可能不派发 pointermove；可让笔尖轻触纸面）。';
+      render();
+    }, 2000);
+  }, 1000);
+});
+
+$('btnClear').addEventListener('click', () => { ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, pad.width, pad.height); ctx.restore(); });
+
+// ---------- 汇总快照 ----------
+function snapshot() {
+  const W = R.win;
+  const lat = sortedCopy(W.latency.vals.a);
+  const frameIv = sortedCopy(W.frameIntervals.a);
+  const coIv = sortedCopy(W.coalesced.intervals.a);
+  const secondsSoFar = W.frozen ? W.seconds : (W.startedAt != null ? (now() - W.startedAt) / 1000 : null);
+  const contactSeconds = W.contactSeconds + (penDown && recording() ? (now() - penDownAt) / 1000 : 0);
+  const gripAz = circStats(R.grip.azimuth.a);
+  const coMed = quantile(coIv, .5);
+  return {
+    generatedAt: new Date().toISOString(),
+    env: env(), features: feat,
+    livePenMovesLastSecond: (R.rafLive.penMoveStamps || []).filter(t => now() - t <= 1000).length,
+    raf: {
+      liveHz: R.rafLive.hz,
+      windowFrames: W.frames, windowSeconds: secondsSoFar,
+      windowAvgHz: secondsSoFar ? W.frames / secondsSoFar : null,
+      frameIntervalMedianMs: quantile(frameIv, .5), frameIntervalP95Ms: quantile(frameIv, .95),
+    },
+    window: {
+      mode: W.active ? 'sampling-10s' : W.frozen ? 'frozen' : 'continuous',
+      seconds: secondsSoFar, events: W.events, pointerTypes: W.pointerTypes,
+      strokes: W.strokes, contactSeconds,
+      penMoves: W.penMoves, penMovesInContact: W.penMovesInContact,
+      penMovesPerSecondInContact: contactSeconds > 0.2 ? W.penMovesInContact / contactSeconds : null,
+      coalesced: {
+        supported: W.coalesced.supported, events: W.coalesced.events,
+        avgPerEvent: W.coalesced.events ? W.coalesced.sumLen / W.coalesced.events : null,
+        maxPerEvent: W.coalesced.maxLen, emptyLists: W.coalesced.empty,
+        sampleIntervalMedianMs: coMed, sampleIntervalP95Ms: quantile(coIv, .95),
+        estimatedHardwareHz: coMed ? 1000 / coMed : null,
+      },
+      predicted: { supported: W.predicted.supported, events: W.predicted.events, avgPerEvent: W.predicted.events ? W.predicted.sumLen / W.predicted.events : null, maxPerEvent: W.predicted.maxLen, emptyLists: W.predicted.empty },
+      firstPenDownPressure: W.firstPenDownPressure, firstPenDown: W.firstPenDown,
+      samples: W.samples,
+      contactSamples: W.pressureVals.seen,
+      zeroPressureRatioInContact: W.pressureVals.seen ? W.zeroPressure / W.pressureVals.seen : null,
+      pressureHist10: W.pressureHist, pressure: summary(W.pressureVals.a),
+      clientXFractional: { seen: W.clientX.fractional > 0, fractional: W.clientX.fractional, total: W.clientX.total },
+      altAz: { present: W.altAz.present, altitudeDeg: summary(W.altAz.altitude.a, DEG), azimuthDeg: summary(W.altAz.azimuth.a, DEG) },
+      tilt: { present: W.tilt.present, tiltX: summary(W.tilt.tiltX.a), tiltY: summary(W.tilt.tiltY.a) },
+      twist: W.twist, tangentialPressure: W.tangentialPressure, contactGeometry: W.contact,
+      buttonsSeen: W.buttonsSeen, buttonSeen: W.buttonSeen,
+      latencyMs: { p50: quantile(lat, .5), p95: quantile(lat, .95), max: lat[lat.length - 1] ?? null, negative: W.latency.negative, hist2msBuckets: W.latency.hist, n: W.latency.vals.seen },
+      hover: { supported: W.hover.moves > 0, moves: W.hover.moves, pointerIds: Object.keys(W.hover.ids), leaves: W.hover.enterLeave },
+      pointerIds: { downSequence: W.pointerIds.down, distinctContactIds: W.pointerIds.distinct, stable: W.pointerIds.distinct <= 1 },
+      palm: W.palm,
+      touchExt: W.touchExt,
+    },
+    grip: {
+      strokes: R.grip.strokes, samples: R.grip.altitude.seen,
+      altitudeDeg: summary(R.grip.altitude.a, DEG),
+      azimuthDeg: { circMean: gripAz.mean != null ? gripAz.mean * DEG : null, circStd: gripAz.std != null ? gripAz.std * DEG : null, quartiles: summary(R.grip.azimuth.a, DEG) },
+      tiltX: summary(R.grip.tiltX.a), tiltY: summary(R.grip.tiltY.a),
+      pressure: summary(R.grip.pressure.a),
+    },
+    posture: R.posture,
+    canvasFilterSupported: feat.canvasFilter,
+  };
+}
+
+// ---------- 渲染面板 ----------
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+function row(k, v, cls) { return `<div class="row"><span class="k">${esc(k)}</span><span class="v ${cls || ''}">${esc(v)}</span></div>`; }
+function card(title, rows) { return `<div class="card"><h2>${esc(title)}</h2>${rows.join('')}</div>`; }
+function hist(arr, cls, labels) {
+  const m = Math.max(1, ...arr);
+  return `<div class="hist ${cls || ''}">${arr.map(v => `<div style="height:${Math.max(2, v / m * 100)}%" title="${v}"></div>`).join('')}</div><div class="histLabel"><span>${labels[0]}</span><span>${labels[1]}</span></div>`;
+}
+const okBad = (b, t, f) => `<div class="row"><span class="k">${esc(t)}</span><span class="v ${b ? 'ok' : 'bad'}">${esc(f)}</span></div>`;
+const q = (s, d = 1) => s && s.n ? `中位 ${fmt(s.median, d)}（Q1 ${fmt(s.q1, d)} / Q3 ${fmt(s.q3, d)}，n=${s.n}）` : '—';
+const obj = o => Object.keys(o).length ? Object.entries(o).map(([k, v]) => `${k}:${v}`).join('  ') : '—';
+
+function render() {
+  const S = snapshot(), W = S.window, e = S.env, f = S.features;
+  const html = [
+    card('环境', [
+      row('屏幕 / 视口', `${e.screen.width}×${e.screen.height} / ${e.inner.width}×${e.inner.height}`),
+      row('devicePixelRatio', fmt(e.devicePixelRatio, 2)),
+      row('maxTouchPoints', e.maxTouchPoints),
+      row('rAF 实测（最近 1 s）', S.raf.liveHz ? `${fmt(S.raf.liveHz, 1)} Hz` : '—'),
+      row('rAF 窗口均值', S.raf.windowAvgHz ? `${fmt(S.raf.windowAvgHz, 1)} Hz（帧间隔中位 ${fmt(S.raf.frameIntervalMedianMs, 2)} ms）` : '—'),
+      okBad(f.canvasFilter, "ctx.filter 支持（'filter' in ctx）", yn(f.canvasFilter)),
+      row('全屏 standalone', yn(e.standalone), 'dim'),
+      `<div class="ua">${esc(e.userAgent)}</div>`,
+    ]),
+    card('特性探测（原型层）', [
+      okBad(f.getCoalescedEvents, 'getCoalescedEvents', yn(f.getCoalescedEvents)),
+      okBad(f.getPredictedEvents, 'getPredictedEvents', yn(f.getPredictedEvents)),
+      okBad(f.altitudeAngle, 'PointerEvent.altitudeAngle / azimuthAngle（Safari ≥18.2）', yn(f.altitudeAngle && f.azimuthAngle)),
+      row('pointerrawupdate', yn(f.pointerrawupdate), f.pointerrawupdate ? 'ok' : 'dim'),
+      row('Touch.altitudeAngle / touchType（WebKit 私有）', `${yn(f.touchAltitudeAngle)} / ${yn(f.touchType)}`),
+      row('media (hover:hover) / (pointer:fine)', `${yn(f.mediaHover)} / ${yn(f.mediaPointerFine)}`, 'dim'),
+    ]),
+    card(`Pointer 事件 · ${W.mode === 'sampling-10s' ? '10 秒窗口采样中' : W.mode === 'frozen' ? '10 秒窗口（已冻结）' : '连续采集'}`, [
+      row('事件计数 down/move/up/cancel', `${W.events.down}/${W.events.move}/${W.events.up}/${W.events.cancel}`),
+      row('pointerType 分布', obj(W.pointerTypes)),
+      row('pen 接触时长 / 笔数', `${fmt(W.contactSeconds, 1)} s / ${W.strokes}`),
+      row('pen pointermove / 秒（接触中）', W.penMovesPerSecondInContact != null ? `${fmt(W.penMovesPerSecondInContact, 1)} 次/s（60Hz 屏应≈60）` : '—'),
+      row('最近 1 s pen pointermove（实时，含悬停）', S.livePenMovesLastSecond, 'dim'),
+      row('getCoalescedEvents 平均合并数', W.coalesced.supported ? `${fmt(W.coalesced.avgPerEvent, 2)}（最大 ${W.coalesced.maxPerEvent}，空列表 ${W.coalesced.emptyLists}）` : (W.coalesced.supported === false ? '不支持' : '—'), W.coalesced.supported === false ? 'bad' : ''),
+      row('合并样本间隔中位 → 推算硬件采样率', W.coalesced.sampleIntervalMedianMs != null ? `${fmt(W.coalesced.sampleIntervalMedianMs, 2)} ms → ${fmt(W.coalesced.estimatedHardwareHz, 0)} Hz` : '—'),
+      row('getPredictedEvents 平均条数', W.predicted.supported ? `${fmt(W.predicted.avgPerEvent, 2)}（最大 ${W.predicted.maxPerEvent}）` : (W.predicted.supported === false ? '不支持' : '—')),
+      row('首个 pen pointerdown 的 pressure', fmt(W.firstPenDownPressure, 3)),
+      row('接触中 pressure===0 样本比例', W.zeroPressureRatioInContact != null ? `${fmt(W.zeroPressureRatioInContact * 100, 1)}%（n=${W.contactSamples}）` : '—', W.zeroPressureRatioInContact > 0.05 ? 'bad' : ''),
+      row('压力分布', q(W.pressure, 2)),
+      hist(W.pressureHist10, '', ['p=0', 'p=1']),
+      row('clientX/Y 出现小数', `${yn(W.clientXFractional.seen)}（${W.clientXFractional.fractional}/${W.clientXFractional.total}）`),
+      row('altitude/azimuth 事件级存在', yn(W.altAz.present), W.altAz.present ? 'ok' : (W.altAz.present === false ? 'bad' : '')),
+      row('tiltX/tiltY 事件级存在', yn(W.tilt.present)),
+      row('twist 非零', W.twist.present ? `${W.twist.nonzero} 次（最大 ${W.twist.max}°）` : '—', W.twist.nonzero ? 'ok' : 'dim'),
+      row('tangentialPressure', W.tangentialPressure.present ? `${fmt(W.tangentialPressure.min, 2)} … ${fmt(W.tangentialPressure.max, 2)}` : '—'),
+      row('buttons 取值（次数）', obj(W.buttonsSeen)),
+      row('接触宽高 width/height', W.contactGeometry.widthMin != null ? `${fmt(W.contactGeometry.widthMin, 1)}–${fmt(W.contactGeometry.widthMax, 1)} / ${fmt(W.contactGeometry.heightMin, 1)}–${fmt(W.contactGeometry.heightMax, 1)}` : '—', 'dim'),
+    ]),
+    card('延迟 performance.now() − e.timeStamp', [
+      row('p50 / p95 / max', W.latencyMs.n ? `${fmt(W.latencyMs.p50, 2)} / ${fmt(W.latencyMs.p95, 2)} / ${fmt(W.latencyMs.max, 2)} ms（n=${W.latencyMs.n}）` : '—'),
+      row('负值样本（timeStamp 被粗化/未来）', W.latencyMs.negative, W.latencyMs.negative ? 'bad' : 'dim'),
+      hist(W.latencyMs.hist2msBuckets, 'lat', ['0 ms', '≥18 ms（2 ms/桶）']),
+    ]),
+    card('悬停 / pointerId / 掌拒绝', [
+      okBad(W.hover.supported, '悬停（pen buttons===0 的 pointermove）', W.hover.supported ? `到达 ${W.hover.moves} 次` : '未到达'),
+      row('悬停 pointerId', W.hover.pointerIds.join(', ') || '—', 'dim'),
+      row('接触 pointerId 序列', W.pointerIds.downSequence.slice(-12).join(', ') || '—', 'dim'),
+      row('接触 pointerId 是否稳定', W.pointerIds.downSequence.length ? (W.pointerIds.stable ? `稳定（唯一 ${W.pointerIds.distinctContactIds} 个）` : `变化（${W.pointerIds.distinctContactIds} 个不同）`) : '—'),
+      row('pen 接触期间 touch pointer down/move', `${W.palm.touchPointerDownsDuringPen} / ${W.palm.touchPointerMovesDuringPen}`, W.palm.touchPointerDownsDuringPen ? 'bad' : 'ok'),
+      row('pen 接触期间 Touch Events（其中非 stylus）', `${W.palm.touchEventsDuringPen}（${W.palm.nonStylusTouchesDuringPen}）`, W.palm.nonStylusTouchesDuringPen ? 'bad' : 'ok'),
+    ]),
+    card('Touch Events 私有扩展（<18.2 回退判据）', [
+      row('touchstart / touchmove 计数', `${W.touchExt.touchstarts} / ${W.touchExt.touchmoves}`),
+      row('Touch.altitudeAngle / azimuthAngle', W.touchExt.hasAltitude == null ? '—' : `${yn(W.touchExt.hasAltitude)} / ${yn(W.touchExt.hasAzimuth)}`, W.touchExt.hasAltitude ? 'ok' : ''),
+      row('Touch.touchType 取值', obj(W.touchExt.touchTypes)),
+      row('Touch.force', yn(W.touchExt.hasForce)),
+      row('首个带倾角的 Touch 样本', W.touchExt.altitudeSample ? `alt ${fmt(W.touchExt.altitudeSample.altitudeAngle * DEG, 1)}° az ${fmt(W.touchExt.altitudeSample.azimuthAngle * DEG, 1)}° force ${fmt(W.touchExt.altitudeSample.force, 2)}` : '—', 'dim'),
+    ]),
+    card('自然握姿倾角（书写接触中，持续累计）', [
+      row('笔数 / 样本数', `${S.grip.strokes} / ${S.grip.samples}`),
+      row('altitude（°，90=垂直）', q(S.grip.altitudeDeg)),
+      row('azimuth（°）圆均值 / 圆 σ', S.grip.azimuthDeg.circMean != null ? `${fmt(S.grip.azimuthDeg.circMean, 1)} / ${fmt(S.grip.azimuthDeg.circStd, 1)}` : '—'),
+      row('tiltX / tiltY 中位', S.grip.tiltX.n ? `${fmt(S.grip.tiltX.median, 1)} / ${fmt(S.grip.tiltY.median, 1)}` : '—'),
+      row('接触压力', q(S.grip.pressure, 2)),
+    ]),
+    card('姿态稳定性（静握 2 秒）', S.posture ? [
+      row('样本数 / 时长', `${S.posture.samples} / ${fmt(S.posture.seconds, 2)} s`),
+      row('altitude 均值 / σ', `${fmt(S.posture.altitudeMeanDeg, 2)}° / ${fmt(S.posture.altitudeStdDeg, 3)}°`),
+      row('azimuth 均值 / 圆 σ', `${fmt(S.posture.azimuthMeanDeg, 2)}° / ${fmt(S.posture.azimuthCircStdDeg, 3)}°`),
+      row('tiltX σ / tiltY σ', `${fmt(S.posture.tiltXStdDeg, 3)} / ${fmt(S.posture.tiltYStdDeg, 3)}`),
+      row('pressure 均值 / σ（接触样本）', `${fmt(S.posture.pressureMean, 3)} / ${fmt(S.posture.pressureStd, 4)}（n=${S.posture.contactSamples}）`),
+    ] : [row('尚未测量', '点「静握 2 秒」', 'dim')]),
+  ].join('');
+  $('stats').innerHTML = html;
+}
+render();
+setInterval(render, 250);
+// 面板刷新时顺带清理最近 1 秒的 pen move 时间戳（仅用于诊断）
+setInterval(() => { const a = R.rafLive.penMoveStamps; if (!a) return; const t = now(); while (a.length && t - a[0] > 1000) a.shift(); }, 500);
+
+// ---------- 导出 ----------
+const exportMsg = $('exportMsg'), jsonOut = $('jsonOut');
+$('btnExport').addEventListener('click', async () => {
+  const json = JSON.stringify(snapshot(), null, 2);
+  jsonOut.value = json;
+  exportMsg.textContent = '上传中…';
+  try {
+    const r = await fetch('/save-json?name=probe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: json });
+    const text = await r.text();
+    if (!r.ok) throw new Error(`HTTP ${r.status}: ${text}`);
+    exportMsg.innerHTML = `已保存到 Mac：<b style="color:#7ee2a8">${esc(text)}</b>（${(json.length / 1024).toFixed(1)} KB）`;
+  } catch (err) {
+    exportMsg.innerHTML = `<span style="color:#ff8a80">导出失败：${esc(err.message)}</span><br>请确认 Mac 上以 <code>node server.js 8642 --lan</code> 启动、iPad 与 Mac 在同一 Wi-Fi；也可展开下方手动复制 JSON。`;
+  }
+});
+$('btnCopy').addEventListener('click', async () => {
+  if (!jsonOut.value) jsonOut.value = JSON.stringify(snapshot(), null, 2);
+  try { await navigator.clipboard.writeText(jsonOut.value); exportMsg.textContent = '已复制到剪贴板。'; }
+  catch (err) { jsonOut.focus(); jsonOut.select(); exportMsg.textContent = '已全选，请手动复制。'; }
+});
+
+window.__probe = { snapshot, R, feat };
+})();
+</script>
+</body>
+</html>

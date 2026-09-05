@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["server.js", "8642"],
       "port": 8642
+    },
+    {
+      "name": "bimo-lan",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js", "8642", "--lan"],
+      "port": 8642
     }
   ]
 }
