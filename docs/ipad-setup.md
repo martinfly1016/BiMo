@@ -21,7 +21,7 @@
 2. 在项目目录启动：
 
    ```bash
-   cd "/Users/yuchao/Documents/vibe coding/bimo"
+   cd <项目目录>
    node server.js 8642 --lan
    ```
 
