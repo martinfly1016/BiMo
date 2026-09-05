@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>笔墨 · 毛笔书写工作台</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>笔墨 <span class="sub">BIMO · 毛笔物理书写工作台</span></h1>
+  </header>
+
+  <main>
+    <div id="stage">
+      <canvas id="paperCanvas"></canvas>
+      <canvas id="inkCanvas"></canvas>
+      <canvas id="overlayCanvas"></canvas>
+      <div id="strokeInfo" class="hidden">
+        <div id="strokeName"></div>
+        <div id="strokeTech"></div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <section>
+        <h2>演示 · 永字八法</h2>
+        <button id="btnDemo" class="primary">▶ 书写「永」字</button>
+        <div id="strokeChips"></div>
+        <label>书写速度
+          <input type="range" id="speed" min="0.3" max="2.5" step="0.1" value="1">
+        </label>
+      </section>
+
+      <section>
+        <h2>毛笔</h2>
+        <label>笔锋大小
+          <input type="range" id="brushSize" min="8" max="42" step="1" value="29">
+        </label>
+        <label>笔毫弹性（软 ↔ 硬）
+          <input type="range" id="stiffness" min="0.1" max="0.9" step="0.05" value="0.45">
+        </label>
+        <label>含墨量
+          <div class="inkRow">
+            <div id="inkBar"><div id="inkFill"></div></div>
+            <button id="btnDip">蘸墨</button>
+          </div>
+        </label>
+        <label>墨色
+          <select id="inkColor">
+            <option value="red" selected>朱砂红</option>
+            <option value="black">墨黑</option>
+          </select>
+        </label>
+      </section>
+
+      <section>
+        <h2>纸张</h2>
+        <label>吸墨 / 洇墨
+          <input type="range" id="absorb" min="0" max="1" step="0.05" value="0.35">
+        </label>
+        <label class="checkRow">
+          <input type="checkbox" id="showGrid" checked> 显示米字格
+        </label>
+        <button id="btnClear">清纸</button>
+      </section>
+
+      <section>
+        <h2>手写</h2>
+        <p class="hint">直接在纸上用鼠标或触控笔书写。触控笔支持真实压感；鼠标书写时压力由运笔快慢模拟——慢按则重，快提则轻。</p>
+        <label>鼠标基准压力
+          <input type="range" id="basePressure" min="0.2" max="1" step="0.05" value="0.65">
+        </label>
+      </section>
+    </aside>
+  </main>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
