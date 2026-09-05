@@ -2,3 +2,7 @@
 node_modules/
 exports/
 *.log
+
+# 参考视频不入库（版权；本地保留）
+sample1.mp4
+sample2.mp4
