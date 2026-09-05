@@ -3,10 +3,23 @@
 // 用法：await __H.init() → 载入真迹、沙箱渲染 strokes.js 五笔、按最近笔画切分参照、出报告
 //       await __H.evalNodes(key,k,nodes) → 沙箱渲染候选并对比第 k 笔参照
 // 坐标：字格 500x500 掩膜，1px = 2 归一化单位(gu)
+//
+// —— 基线坐标（M0 确定性金掩膜，2026-09-05）——
+//   笔宽 CANON_SIZE（沙箱 brush.size，RSIZE=600 时 1:1 等于滑块值）；CANON_SPEED 1.3；
+//   DETERMINISTIC=true 时每次 render 前 sb.brush._strokeCount=0（五笔同种子 7.13）、
+//   sb.player.fixedDt = FIXED_DT = 1/60（固定时间片，脱离 rAF 时序）；
+//   真迹 ref-cell.png md5 2c0020a610371141f903fc9bdba6835f；掩膜阈值见 redMask/canvasMask。
+//   金掩膜存 /golden/<name>-whole.png、-s1..s5.png（黑=墨）；H.saveGolden(name) 生成、
+//   H.goldenCheck(name) 逐像素比对。实时对照分布需显式 __H.DETERMINISTIC=false。
+//   注意：__H.CANON_SIZE 非空时沙箱笔宽以它为准而非滑块；改笔宽后要 __H.resetSandboxes()。
 (() => {
   const N = 500;       // 掩膜分辨率
   const RSIZE = 600;   // 固定渲染画布尺寸（brush.size 基准 = 滑块值）
-  const H = window.__H = { N, RSIZE, CANON_SPEED: 1.3 };
+  const H = window.__H = { N, RSIZE, CANON_SPEED: 1.3,
+    CANON_SIZE: 29,        // 基线笔宽（0.900 记录实测在 29 下复现，26 仅 0.863）；置 null 则沙箱首次创建时读滑块 #brushSize
+    DETERMINISTIC: true,   // 评估默认确定性（固定 dt + 种子归零）；实时对照需显式关
+    FIXED_DT: 1 / 60,      // 确定性时间片（秒）
+  };
 
   const loadImg = (url) => new Promise((res, rej) => {
     const img = new Image(); img.onload = () => res(img); img.onerror = () => rej('load fail ' + url);
@@ -92,6 +105,32 @@
       bestShiftGu: [best.dx*2, best.dy*2], iouAtBest: +(best.inter/(ac+bc-best.inter)).toFixed(3) };
   };
 
+  // 沙箱笔宽（设计尺度，600 基准）：CANON_SIZE 优先，否则读滑块；记录到 H.sandboxSize
+  const designSize = () => {
+    const s = H.CANON_SIZE ?? parseFloat(document.getElementById('brushSize').value);
+    H.sandboxSize = s;
+    return s;
+  };
+  // 清缓存沙箱（改笔宽/换 brush 参数后必须调用，否则沿用首次创建的 brush.size）
+  H.resetSandboxes = () => { H.sandboxes = {}; H._fastSb = null; };
+
+  // 隐藏标签页（浏览器预览面板）里 rAF 停摆、嵌套 setTimeout 被钳到 1s/次——确定性路径
+  // 1/60s/帧会慢 60 倍。确定性渲染期间用 MessageChannel 即时调度顶替 rAF（不受定时器节流；
+  // player 在 rAF 回调里 clearTimeout 兜底定时器，故其 120ms 回退永不触发）。fixedDt 下帧时序
+  // 不参与计算，结果逐像素不变。实时路径（DETERMINISTIC=false）不换调度器。
+  H.FAST_SCHED = true;
+  const fastRaf = (() => {
+    const mc = new MessageChannel(); const pend = new Map(); let k = 0;
+    mc.port1.onmessage = (e) => { const cb = pend.get(e.data); if (cb) { pend.delete(e.data); cb(performance.now()); } };
+    return { req: (cb) => { pend.set(++k, cb); mc.port2.postMessage(k); return k; }, cancel: (id) => { pend.delete(id); } };
+  })();
+  const withScheduler = async (fast, fn) => {
+    if (!fast) return fn();
+    const oR = window.requestAnimationFrame, oC = window.cancelAnimationFrame;
+    window.requestAnimationFrame = fastRaf.req; window.cancelAnimationFrame = fastRaf.cancel;
+    try { return await fn(); } finally { window.requestAnimationFrame = oR; window.cancelAnimationFrame = oC; }
+  };
+
   // 固定 600px 沙箱：自带 canvas/brush/paper/player，尺寸与可见视口无关
   H.sandboxes = {};
   H.render = async (key, nodes, speed) => {
@@ -100,20 +139,75 @@
     if (!sb) {
       const cvs = document.createElement('canvas'); cvs.width = cvs.height = RSIZE;
       const BrushC = B.brush.constructor, PlayerC = B.player.constructor, PaperC = B.paper.constructor;
-      const designSize = parseFloat(document.getElementById('brushSize').value); // 滑块值(26)
-      const brush = new BrushC({ size: designSize * (RSIZE / 600), stiffness: B.brush.stiffness, color: 'red', layerSize: RSIZE });
+      const brush = new BrushC({ size: designSize() * (RSIZE / 600), stiffness: B.brush.stiffness, color: 'red', layerSize: RSIZE });
       const paper = new PaperC(RSIZE); paper.absorb = B.paper.absorb;
       const player = new PlayerC(brush, paper, cvs.getContext('2d'), null);
       sb = H.sandboxes[key] = { cvs, brush, player };
     }
     sb.player.speed = speed ?? H.CANON_SPEED;
+    // 确定性开关：固定时间片 + 噪声种子归零（每笔 begin() 后 _strokeCount=1 → seed 7.13）
+    if (H.DETERMINISTIC) { sb.brush._strokeCount = 0; sb.player.fixedDt = H.FIXED_DT; }
+    else sb.player.fixedDt = undefined;
     sb.cvs.getContext('2d').clearRect(0, 0, RSIZE, RSIZE);
     sb.brush.dip();
     sb.player.playing = true;
-    await sb.player._writeStroke({ nodes });
+    await withScheduler(H.DETERMINISTIC && H.FAST_SCHED, () => sb.player._writeStroke({ nodes }));
     sb.player.playing = false;
     sb.lastMask = canvasMask(sb.cvs);
     return sb.lastMask;
+  };
+
+  // —— 金掩膜：把当前 H.ours 五笔 + 整字掩膜存为黑白 PNG（黑=墨），逐像素可复现基线 ——
+  const maskToPngDataURL = (m) => {
+    const c = document.createElement('canvas'); c.width = c.height = N;
+    const cc = c.getContext('2d'); const im = cc.createImageData(N, N);
+    for (let i = 0; i < N * N; i++) { const v = m[i] ? 0 : 255; im.data[i*4] = im.data[i*4+1] = im.data[i*4+2] = v; im.data[i*4+3] = 255; }
+    cc.putImageData(im, 0, 0);
+    return c.toDataURL('image/png');
+  };
+  const pngToMask = (img) => {
+    const c = document.createElement('canvas'); c.width = c.height = N;
+    const cc = c.getContext('2d'); cc.drawImage(img, 0, 0);   // 1:1 不缩放
+    const d = cc.getImageData(0, 0, N, N).data;
+    const m = new Uint8Array(N * N);
+    for (let i = 0; i < N * N; i++) if (d[i*4] < 128) m[i] = 1;
+    return m;
+  };
+  const unionMasks = (ms) => { const w = new Uint8Array(N*N); for (const m of ms) for (let i=0;i<N*N;i++) if (m[i]) w[i] = 1; return w; };
+  const diffCount = (a, b) => { let n = 0; for (let i = 0; i < N*N; i++) if (a[i] !== b[i]) n++; return n; };
+
+  // POST 到 /save-png，服务器写 exports/export-<ts>.png 并返回路径；调用方再移到 golden/<name>-*.png
+  H.saveGolden = async (name) => {
+    if (!H.ours || H.ours.length !== 5) throw new Error('先 __H.init()/recapture() 得到 H.ours 五笔');
+    const items = [['whole', unionMasks(H.ours)], ...H.ours.map((m, k) => ['s' + (k+1), m])];
+    const files = [];
+    for (const [tag, m] of items) {
+      const r = await fetch('/save-png', { method: 'POST', body: maskToPngDataURL(m) });
+      files.push({ target: 'golden/' + name + '-' + tag + '.png', saved: await r.text(), px: m.reduce((a, b) => a + b, 0) });
+    }
+    return { name, size: H.sandboxSize, deterministic: H.DETERMINISTIC, files };
+  };
+
+  // 加载 /golden/<name>-*.png 回掩膜，与当前 H.ours（rerender=true 则先 recapture）逐像素比对
+  H.goldenCheck = async (name, rerender = false) => {
+    if (rerender || !H.ours || H.ours.length !== 5) await H.recapture();
+    const tags = ['whole', 's1', 's2', 's3', 's4', 's5'];
+    const gold = {};
+    for (const t of tags) gold[t] = pngToMask(await loadImg('/golden/' + name + '-' + t + '.png'));
+    const perStroke = H.ours.map((m, k) => {
+      const d = diffCount(m, gold['s' + (k+1)]);
+      return { s: k+1, identical: d === 0, diffPixels: d, oursPx: m.reduce((a, b) => a + b, 0), goldPx: gold['s'+(k+1)].reduce((a, b) => a + b, 0) };
+    });
+    const dw = diffCount(unionMasks(H.ours), gold.whole);
+    return { name, identical: dw === 0 && perStroke.every(p => p.identical), diffPixels: dw, perStroke };
+  };
+
+  // 快渲染整字 IoU（renderFast 五笔并集 vs 真迹），供与实时/确定性路径对照
+  H.fastWholeIoU = async () => {
+    const mod = await import('/js/strokes.js?t=' + performance.now());
+    const ms = mod.YONG_STROKES.map(s => H.renderFast(s.nodes));
+    const per = ms.map((m, k) => H.refStrokes ? H.cmp(m, H.refStrokes[k], 0, 2).iou : null);
+    return { wholeIoU: H.cmp(unionMasks(ms), H.truthWhole, 0, 2).iou, perStroke: per };
   };
 
   // 同步快渲染（跳过实时帧循环，快 ~150x）——沿 Catmull-Rom 直接驱动笔刷。
@@ -124,12 +218,12 @@
     if (!H._fastSb) {
       const cvs = document.createElement('canvas'); cvs.width = cvs.height = RSIZE;
       const BrushC = B.brush.constructor, PaperC = B.paper.constructor;
-      const design = parseFloat(document.getElementById('brushSize').value);
-      const brush = new BrushC({ size: design*(RSIZE/600), stiffness: B.brush.stiffness, color:'red', layerSize: RSIZE });
+      const brush = new BrushC({ size: designSize()*(RSIZE/600), stiffness: B.brush.stiffness, color:'red', layerSize: RSIZE });
       const paper = new PaperC(RSIZE); paper.absorb = B.paper.absorb;
       H._fastSb = { cvs, ctx: cvs.getContext('2d'), brush, paper };
     }
     const { cvs, ctx, brush, paper } = H._fastSb;
+    if (H.DETERMINISTIC) brush._strokeCount = 0;   // 与实时沙箱同种子策略
     const base = P.baseSpeed ?? 300;
     const nodes = gnodes.map(n => { const c = paper.gridToCanvas(n.x, n.y); return { ...n, x: c.x, y: c.y }; });
     ctx.clearRect(0, 0, RSIZE, RSIZE); brush.dip();

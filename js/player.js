@@ -12,6 +12,7 @@ export class Player {
     this.onStrokeChange = null; // (index, stroke) => void
     this.onDone = null;
     this.baseSpeed = 300;       // px/s 基准行笔速度
+    this.fixedDt = undefined;   // 仅沙箱评估用的确定性时间片（秒）；undefined = UI 实时路径按真实流逝时间推进
   }
 
   // 把字格坐标节点转换为画布坐标
@@ -71,7 +72,7 @@ export class Player {
       const frame = (now) => {
         if (!this.playing) { brush.end(); resolve(); return; }
         const cap = document.hidden ? 3 : 0.12;
-        const dt = Math.min(cap, (now - last) / 1000);
+        const dt = this.fixedDt ?? Math.min(cap, (now - last) / 1000);
         last = now;
 
         // 起笔必须锚定在节点 0（否则高速下第一帧就越过起笔段，针尖被吃掉）
