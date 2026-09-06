@@ -148,6 +148,54 @@ fitCanvas();
 window.addEventListener('resize', fitCanvas);
 function localPos(ev) { const r = pad.getBoundingClientRect(); return { x: ev.clientX - r.left, y: ev.clientY - r.top }; }
 
+// ---------- 图形能力功能测试 ----------
+// canvas 2D filter：画一个 1px 实心点，套 blur(2px) 再画，读相邻像素 alpha——只有 blur 真正生效时邻像素才有覆盖
+function testCanvasFilter() {
+  try {
+    const c = document.createElement('canvas'); c.width = c.height = 9;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    if (!('filter' in g)) return false;
+    g.fillStyle = '#000'; g.fillRect(4, 4, 1, 1);
+    const src = document.createElement('canvas'); src.width = src.height = 9;
+    src.getContext('2d').drawImage(c, 0, 0);
+    g.clearRect(0, 0, 9, 9);
+    g.filter = 'blur(2px)'; g.drawImage(src, 0, 0); g.filter = 'none';
+    const a = g.getImageData(2, 4, 1, 1).data[3];   // 距点 2px 的邻像素
+    return a > 0;
+  } catch (e) { return false; }
+}
+function probeWebGL2() {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2', { antialias: false });
+    if (!gl) return { supported: false };
+    const ext = gl.getSupportedExtensions() || [];
+    const want = ['EXT_color_buffer_float', 'EXT_color_buffer_half_float', 'OES_texture_float_linear', 'EXT_float_blend', 'EXT_texture_filter_anisotropic'];
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const out = {
+      supported: true,
+      maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      maxRenderbufferSize: gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),
+      renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER),
+      extensions: Object.fromEntries(want.map(n => [n, ext.includes(n)])),
+      extensionCount: ext.length,
+    };
+    const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+    return out;
+  } catch (e) { return { supported: false, error: String(e) }; }
+}
+async function probeWebGPU() {
+  if (!('gpu' in navigator)) return { supported: false };
+  try {
+    const ad = await navigator.gpu.requestAdapter();
+    if (!ad) return { supported: true, adapter: null };
+    const info = ad.info || {};
+    const feats = [...ad.features].slice(0, 40);
+    return { supported: true, adapter: { vendor: info.vendor, architecture: info.architecture, device: info.device, description: info.description },
+      features: feats, limits: { maxTextureDimension2D: ad.limits.maxTextureDimension2D, maxBufferSize: ad.limits.maxBufferSize, maxComputeWorkgroupSizeX: ad.limits.maxComputeWorkgroupSizeX } };
+  } catch (e) { return { supported: true, error: String(e) }; }
+}
+
 // ---------- 结果容器 ----------
 const feat = {
   PointerEvent: 'PointerEvent' in window,
@@ -162,11 +210,15 @@ const feat = {
   touchType: !!(window.Touch && 'touchType' in Touch.prototype),
   touchForce: !!(window.Touch && 'force' in Touch.prototype),
   canvasFilter: 'filter' in ctx,
+  canvasFilterWorks: testCanvasFilter(),   // 功能测试：属性存在≠生效（WebKit CanvasFiltersEnabled 默认关闭时赋值被忽略）
+  webgl2: probeWebGL2(),
+  webgpu: 'gpu' in navigator,               // adapter 详情异步填入 feat.webgpuAdapter
   OffscreenCanvas: 'OffscreenCanvas' in window,
   mediaHover: matchMedia('(hover: hover)').matches,
   mediaPointerFine: matchMedia('(pointer: fine)').matches,
   mediaAnyPointerFine: matchMedia('(any-pointer: fine)').matches,
 };
+probeWebGPU().then(r => { feat.webgpuAdapter = r; }).catch(() => {});
 const env = () => ({
   userAgent: navigator.userAgent,
   platform: navigator.platform,
@@ -511,6 +563,9 @@ function snapshot() {
     },
     posture: R.posture,
     canvasFilterSupported: feat.canvasFilter,
+    canvasFilterWorks: feat.canvasFilterWorks,
+    webgl2: feat.webgl2,
+    webgpu: feat.webgpuAdapter || { supported: feat.webgpu, adapter: 'pending' },
   };
 }
 
@@ -535,7 +590,10 @@ function render() {
       row('maxTouchPoints', e.maxTouchPoints),
       row('rAF 实测（最近 1 s）', S.raf.liveHz ? `${fmt(S.raf.liveHz, 1)} Hz` : '—'),
       row('rAF 窗口均值', S.raf.windowAvgHz ? `${fmt(S.raf.windowAvgHz, 1)} Hz（帧间隔中位 ${fmt(S.raf.frameIntervalMedianMs, 2)} ms）` : '—'),
-      okBad(f.canvasFilter, "ctx.filter 支持（'filter' in ctx）", yn(f.canvasFilter)),
+      okBad(f.canvasFilter, "ctx.filter 属性存在", yn(f.canvasFilter)),
+      okBad(f.canvasFilterWorks, 'ctx.filter blur 实际生效（功能测试）', yn(f.canvasFilterWorks) + (f.canvasFilter && !f.canvasFilterWorks ? '（属性在但被忽略：工作台的积墨内缘/晕层不会渲染）' : '')),
+      okBad(f.webgl2 && f.webgl2.supported, 'WebGL2', f.webgl2 && f.webgl2.supported ? `是 · ${f.webgl2.renderer} · maxTex ${f.webgl2.maxTextureSize} · float_rt ${yn(f.webgl2.extensions.EXT_color_buffer_float)} · float_linear ${yn(f.webgl2.extensions.OES_texture_float_linear)}` : '否'),
+      row('WebGPU', f.webgpuAdapter ? (f.webgpuAdapter.adapter ? `是 · ${f.webgpuAdapter.adapter.description || f.webgpuAdapter.adapter.vendor || 'adapter'} · features ${f.webgpuAdapter.features ? f.webgpuAdapter.features.length : '?'}` : (f.webgpuAdapter.supported ? '有 navigator.gpu 但无 adapter' : '否')) : (f.webgpu ? '探测中…' : '否'), 'dim'),
       row('全屏 standalone', yn(e.standalone), 'dim'),
       `<div class="ua">${esc(e.userAgent)}</div>`,
     ]),
